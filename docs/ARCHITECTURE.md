@@ -1,8 +1,8 @@
 # Architecture — Sunsets AI Keyboard
 
-**Version:** 0.2 (Milestone 0 — Approved)
+**Version:** 0.3 (Milestone 1.1 — Pending approval)
 **Last updated:** 2026-06-27
-**Status:** Approved
+**Status:** Pending approval
 
 ---
 
@@ -17,7 +17,7 @@
 │  ┌────────────────────────┐  ┌────────────────────────────┐ │
 │  │   Sunsets Properties   │  │    SunsetsAIKeyboard       │ │
 │  │   (Main Application)   │  │    (Keyboard Extension)    │ │
-│  │   SwiftUI              │  │    UIKit / UIInputVC       │ │
+│  │   SwiftUI + MapKit     │  │    UIKit / UIInputVC       │ │
 │  └────────────┬───────────┘  └──────────────┬─────────────┘ │
 │               │                             │               │
 │               └──────────┬──────────────────┘               │
@@ -35,14 +35,15 @@
 └──────────────────────────────────────────────────────────────┘
 
 External (Future)
-┌─────────────────────┐     ┌──────────────────────────┐
-│  Supabase           │────▶│  Vercel Backend           │
-│  (Remote catalog)   │     │  (TypeScript)             │
-│  PostgreSQL + RLS   │     │  • Auth                   │
-└─────────────────────┘     │  • Property sync          │
-                            │  • AI generation proxy    │
-                            │  • Rate limiting          │
-                            └──────────────────────────┘
+┌─────────────────────┐     ┌──────────────────────────────────┐
+│  Supabase           │────▶│  Vercel Backend                  │
+│  (Remote catalog)   │     │  (TypeScript)                    │
+│  PostgreSQL + RLS   │     │  • Auth                          │
+└─────────────────────┘     │  • Property sync                 │
+                            │  • AI generation proxy           │
+                            │  • Listing import (Claude)       │
+                            │  • Rate limiting                 │
+                            └──────────────────────────────────┘
 ```
 
 ---
@@ -53,13 +54,16 @@ External (Future)
 
 **Responsibility:** Source of truth for the property catalog. All writes originate here.
 
-**Technology:** SwiftUI, Swift Concurrency (async/await)
+**Technology:** SwiftUI, Swift Concurrency (async/await), MapKit
 
 **What it owns:**
-- Full `Property` model (all fields including sensitive ones)
+- Full `Property` model (all fields including sensitive location data)
 - CRUD operations on the property catalog
+- Internal code generation (`InternalCodeGenerator`)
+- Location selection (map picker, address search, Google Maps URL import)
+- Listing text import and draft review (`ListingImportService`, `LocalListingParser`)
 - Synchronization with Supabase (future)
-- Building and writing the keyboard-safe cache to the App Group
+- Building and writing the keyboard-safe cache to the App Group (`CatalogCacheService`)
 - Active property selection
 - Agent authentication state (future)
 
@@ -80,29 +84,27 @@ External (Future)
 - Keyboard UI (property bar, search, quick actions, preview, insert)
 - Reading the keyboard-safe cache from the App Group
 - Writing the active property ID back to the App Group
-- Maintaining the recently-used list (App Group)
+- Maintaining the recently-used list
 - Explicit clipboard import (user-initiated only)
 - Local intent classification
-- Deterministic template rendering
+- Deterministic template rendering (including `{{googleMapsURL}}` and `{{publicLocation}}`)
 - Backend AI generation requests (future)
 - `textDocumentProxy.insertText()` calls
 
 **What it does not own:**
 - Writing to the canonical property catalog
-- Authentication (beyond passing a stored token)
+- Authentication
 - Supabase queries
+- Location services
+- Listing import
 
-**Memory constraint:** iOS keyboard extensions have a soft memory limit of approximately 50 MB. The keyboard-safe cache must be sized accordingly. Images are excluded from the cache.
+**Memory constraint:** ~50 MB soft cap. No image data in the cache.
 
 ---
 
 ### 2.3 App Group Shared Container
 
 **Identifier:** `group.com.sunsetsrealestate.sunsetsai`
-
-**Written by:** Sunsets Properties (catalog, version token); SunsetsAIKeyboard (active property ID, recent list)
-
-**Read by:** Both targets
 
 **Contents:**
 
@@ -120,58 +122,168 @@ External (Future)
 
 ### 3.1 Property (Full — Main App Only)
 
-The full property model is defined in `docs/PROPERTY_SCHEMA.md`. It lives exclusively inside the main application's data layer. It is never written directly to the App Group.
+The full property model is defined in `docs/PROPERTY_SCHEMA.md` Section 5. It lives exclusively inside the main application's data layer.
+
+**Milestone 1.1 additions:**
+- `publicLocationLabel: String?`
+- `formattedAddress: String?`
+- `googleMapsURL: String?`
+- `locationSource: LocationSource`
+- `isExactLocationShareable: Bool`
+- `includedItems: [String]`
+- `excludedItems: [String]`
+
+`latitude` and `longitude` existed in the schema since v0.2; they now have a defined UI path for setting them via map picker, address search, or URL import.
 
 ### 3.2 KeyboardProperty (Keyboard-Safe Cache)
 
-A projection of the full property containing only the fields needed by the keyboard. See `docs/PROPERTY_SCHEMA.md` Section 4 for the exact field list.
+A projection of the full property. See `docs/PROPERTY_SCHEMA.md` Section 6 for the exact field list.
 
-Excluded from the keyboard cache (approved, ADR-008):
-- `fullAddress` — use `locationSummary` instead
-- `assignedAgentId` — not needed for reply generation
-- `latitude` / `longitude`
-- Internal notes, owner information, commissions, private contact details, access codes, and any other sensitive operational data
+**Milestone 1.1 additions to `KeyboardProperty`:**
+- `publicLocationLabel: String?`
+- `googleMapsURL: String?`
+- `isExactLocationShareable: Bool`
+- `latitude: Double?` — projected only when `isExactLocationShareable == true`
+- `longitude: Double?` — projected only when `isExactLocationShareable == true`
+- `includedItems: [String]`
+- `excludedItems: [String]`
 
-### 3.3 ActivePropertySelection
+### 3.3 PropertyDraft (Listing Import — Milestone 1.1)
 
-Stored as a single String value in the App Group UserDefaults under the key `active_property_id`. The keyboard resolves the full `KeyboardProperty` by scanning the cached catalog.
+A transient, unconfirmed data structure. It is never written to the App Group. It is discarded or converted to a `Property` after user review.
+
+```swift
+struct PropertyDraft {
+    var id: String                             // Temporary session ID
+    var sourceDescription: String              // Original pasted text
+    var parserVersion: String
+    var title: DraftField<String>
+    var operationType: DraftField<OperationType>
+    // ... (all detectable fields as DraftField<T>)
+    var contactInfo: DraftField<String>        // Reference only; never saved to Property
+}
+
+struct DraftField<T: Codable>: Codable {
+    var value: T?
+    var confidence: DraftConfidence
+    var warning: String?
+}
+
+enum DraftConfidence: String, Codable {
+    case high, medium, low, missing
+}
+```
 
 ---
 
-## 4. Proposed Layer Structure
+## 4. New Services (Milestone 1.1)
+
+### 4.1 InternalCodeGenerator
+
+```swift
+protocol InternalCodeGenerator {
+    func nextCode(existingCodes: [String]) -> String
+    func isUnique(_ code: String, existingCodes: [String]) -> Bool
+}
+```
+
+Implementation: scans all `SUN-###` codes, extracts numeric suffixes, finds the maximum, returns `SUN-{max+1}` zero-padded to at least 3 digits.
+
+### 4.2 LocationImportService
+
+```swift
+protocol LocationImportService {
+    func parseGoogleMapsURL(_ url: String) -> LocationImportResult?
+    func searchAddress(_ query: String) async throws -> [MKMapItem]
+    func reverseGeocode(latitude: Double, longitude: Double) async throws -> String?
+}
+
+struct LocationImportResult {
+    var latitude: Double
+    var longitude: Double
+    var extractedURL: String    // Normalized URL to store
+}
+```
+
+Extracts coordinates from both `maps.app.goo.gl/…` short links (resolved via HTTP) and `google.com/maps?q=lat,lon` direct links.
+
+### 4.3 ListingImportService
+
+```swift
+protocol ListingImportService {
+    func parse(_ description: String) async throws -> PropertyDraft
+}
+```
+
+**LocalListingParser** — deterministic, offline, no network:
+- Uses regex and keyword matching to detect price, currency, bedrooms, bathrooms, amenities, etc.
+- Returns `DraftField<T>` with appropriate `DraftConfidence` for each field.
+
+**ClaudeListingParser** — AI-assisted, backend-only (Milestone 4):
+- Conforms to `ListingImportService`.
+- Calls `POST /import/listing` on the Vercel backend.
+- Never calls Anthropic directly from the iOS app.
+- Always returns a draft for human review; never saves automatically.
+
+### 4.4 CatalogCacheService (updated)
+
+Updated to project new fields into `KeyboardProperty`:
+- Includes `latitude`/`longitude` only when `isExactLocationShareable == true`.
+- Includes `publicLocationLabel`, `googleMapsURL`, `isExactLocationShareable`.
+- Includes `includedItems`, `excludedItems`.
+- Excludes `formattedAddress`, `fullAddress`, `locationSource`.
+
+---
+
+## 5. Proposed Layer Structure (updated)
 
 ```
 SunsetsAI/
-├── Shared/                          # Code shared between both targets
-│   ├── Models/
-│   │   ├── Property.swift           # Full model (main app only target)
-│   │   ├── KeyboardProperty.swift   # Keyboard-safe model (both targets)
-│   │   └── PropertyStatus.swift
-│   ├── AppGroup/
-│   │   ├── AppGroupKeys.swift       # Constant key strings
-│   │   └── AppGroupStore.swift      # Read/write helpers
-│   └── Extensions/
-│
 ├── SunsetsProperties/               # Main application target
 │   ├── App/
 │   │   └── SunsetsPropertiesApp.swift
-│   ├── Features/
+│   ├── Models/
+│   │   ├── Property.swift
+│   │   ├── PropertyStatus.swift
+│   │   ├── OperationType.swift
+│   │   ├── PetPolicy.swift
+│   │   ├── QuickReplyTemplate.swift
+│   │   ├── LocationSource.swift        # NEW (Milestone 1.1)
+│   │   └── PropertyDraft.swift         # NEW (Milestone 1.1)
+│   ├── Repositories/
+│   │   ├── PropertyRepository.swift    # Protocol
+│   │   ├── LocalPropertyRepository.swift
+│   │   └── SupabasePropertyRepository.swift  # Milestone 5
+│   ├── Services/
+│   │   ├── CatalogCacheService.swift
+│   │   ├── InternalCodeGenerator.swift  # NEW (Milestone 1.1)
+│   │   ├── LocationImportService.swift  # NEW (Milestone 1.1)
+│   │   └── ListingImportService.swift   # NEW (Milestone 1.1)
+│   │       ├── LocalListingParser.swift
+│   │       └── ClaudeListingParser.swift  # Stub (Milestone 1.1); impl in Milestone 4
+│   ├── ViewModels/
+│   │   ├── CatalogViewModel.swift
+│   │   ├── PropertyEditorViewModel.swift
+│   │   ├── ActivePropertyViewModel.swift
+│   │   └── ListingImportViewModel.swift  # NEW (Milestone 1.1)
+│   ├── Views/
+│   │   ├── MainTabView.swift
 │   │   ├── Catalog/
-│   │   │   ├── CatalogViewModel.swift
-│   │   │   └── CatalogView.swift
 │   │   ├── PropertyDetail/
 │   │   ├── PropertyEditor/
-│   │   └── Setup/                   # Keyboard setup guide
-│   ├── Repositories/
-│   │   ├── PropertyRepository.swift (protocol)
-│   │   ├── MockPropertyRepository.swift  (Milestone 1)
-│   │   └── SupabasePropertyRepository.swift (Milestone 5)
-│   ├── Services/
-│   │   └── CatalogCacheService.swift  # Writes keyboard cache to App Group
-│   └── Resources/
+│   │   │   ├── PropertyEditorView.swift
+│   │   │   └── LocationPickerView.swift  # NEW (Milestone 1.1)
+│   │   ├── ListingImport/               # NEW (Milestone 1.1)
+│   │   │   ├── ListingImportView.swift
+│   │   │   └── DraftReviewView.swift
+│   │   ├── ActiveProperty/
+│   │   └── Settings/
+│   ├── Components/
+│   ├── Formatters/
+│   └── Fixtures/
 │
 └── SunsetsAIKeyboard/               # Keyboard extension target
-    ├── KeyboardViewController.swift  # UIInputViewController root
+    ├── KeyboardViewController.swift
     ├── Features/
     │   ├── PropertySelector/
     │   ├── QuickActions/
@@ -179,143 +291,172 @@ SunsetsAI/
     │   ├── ResponsePreview/
     │   └── AIGeneration/
     ├── Services/
-    │   ├── CatalogReader.swift       # Reads App Group cache
-    │   ├── TemplateEngine.swift      # Deterministic template rendering
-    │   ├── IntentClassifier.swift    # Local intent classification
-    │   └── AIService.swift           # Backend proxy client (future)
+    │   ├── CatalogReader.swift
+    │   ├── TemplateEngine.swift       # Updated to support {{googleMapsURL}}, {{publicLocation}}
+    │   ├── IntentClassifier.swift
+    │   └── AIService.swift            # Future
     └── Resources/
 ```
 
 ---
 
-## 5. Data Flow
+## 6. Data Flow
 
-### 5.1 Main App → App Group → Keyboard
+### 6.1 Main App → App Group → Keyboard (unchanged)
 
 ```
-Admin edits property in Sunsets Properties
+Admin edits property
          │
          ▼
 CatalogCacheService serializes KeyboardProperty array
+  (applies isExactLocationShareable gate for coordinates)
          │
          ▼
 Writes keyboard_catalog.json to App Group container
-Writes catalog_updated_at timestamp
          │
          ▼
 SunsetsAIKeyboard reads file on next launch or refresh
-         │
-         ▼
-CatalogReader deserializes into [KeyboardProperty]
-         │
-         ▼
-Keyboard UI renders property list
 ```
 
-### 5.2 Agent Selects Property in Keyboard
+### 6.2 Location Import Flow (Milestone 1.1)
 
 ```
-Agent taps property in keyboard
+Admin opens LocationPickerView
+         │
+         ├── Map picker: drag pin → latitude, longitude
+         │
+         ├── Address search: MKLocalSearch → formattedAddress, latitude, longitude
+         │
+         └── URL paste: LocationImportService.parseGoogleMapsURL()
+                              → latitude, longitude, googleMapsURL
          │
          ▼
-AppGroupStore writes active_property_id
-AppGroupStore prepends to recent_property_ids
+Admin sets publicLocationLabel (optional, differs from locationSummary)
+Admin toggles isExactLocationShareable
          │
          ▼
-Keyboard UI updates active property bar immediately
+Save → CatalogCacheService projects new fields into KeyboardProperty
 ```
 
-### 5.3 AI Generation (Future — Milestone 4)
+### 6.3 Listing Import Flow (Milestone 1.1)
 
 ```
-Agent imports customer message (explicit clipboard paste)
-Agent taps "Generate with AI"
+Admin pastes listing text in ListingImportView
          │
          ▼
-AIService sends HTTPS POST to Vercel backend:
-  { userId, property: KeyboardProperty, customerMessage, style }
+ListingImportService.parse(description) → PropertyDraft
+(LocalListingParser in Milestone 1.1; ClaudeListingParser in Milestone 4)
          │
          ▼
-Backend validates auth token
-Backend calls Anthropic Messages API with property context
-Backend returns structured JSON response
+DraftReviewView shows fields with DraftConfidence indicators
+Admin reviews, corrects uncertain/missing fields
          │
-         ▼
-Keyboard displays response in preview area
-Agent reviews, taps Insert
+         ├── "Descartar" → draft discarded, nothing saved
          │
-         ▼
-textDocumentProxy.insertText(response)
-Agent sends manually in host app
+         └── "Confirmar y crear propiedad" → PropertyEditorViewModel.save()
+                              → LocalPropertyRepository.save()
 ```
+
+### 6.4 Internal Code Generation Flow (Milestone 1.1)
+
+```
+Admin opens "Nueva propiedad"
+         │
+         ▼
+PropertyEditorViewModel calls InternalCodeGenerator.nextCode(existingCodes:)
+Proposed code pre-filled in internalCode field
+         │
+         ▼
+Admin accepts or overrides
+         │
+         ▼
+PropertyEditorViewModel.validate() checks uniqueness
+         │
+         ├── Duplicate → error displayed, save blocked
+         └── Unique → save proceeds
+```
+
+### 6.5 AI Generation (Future — Milestone 4)
+
+*(Unchanged from v0.2)*
 
 ---
 
-## 6. Repository Pattern (Dependency Injection)
+## 7. Repository Pattern (Dependency Injection)
 
-The main application uses a `PropertyRepository` protocol so the concrete implementation can be swapped:
+*(Unchanged from v0.2)*
 
 ```swift
 protocol PropertyRepository {
     func fetchAll() async throws -> [Property]
     func save(_ property: Property) async throws
     func delete(id: String) async throws
-    func setActive(id: String) async throws
+    func setActive(id: String?) async throws
+    func fetchActiveId() async throws -> String?
+    func fetchEmployee() async throws -> String?
+    func setEmployee(_ name: String) async throws
 }
 ```
 
-- **Milestone 1:** `MockPropertyRepository` — in-memory, no persistence
-- **Milestone 2–4:** `LocalPropertyRepository` — persists to device (UserDefaults or file)
-- **Milestone 5:** `SupabasePropertyRepository` — syncs with remote
+**Milestone 1.1 addition:**
+```swift
+    func fetchAllCodes() async throws -> [String]   // For InternalCodeGenerator
+```
 
 ---
 
-## 7. Authentication (Future — Milestone 5)
+## 8. Authentication (Future — Milestone 5)
 
-- JWT-based authentication via Supabase Auth.
-- The main application stores the auth token in the iOS Keychain.
-- The keyboard reads the token from the shared App Group Keychain access group (requires configuration).
-- The backend validates the token on every AI generation request.
-- Row Level Security in Supabase restricts property access by organization.
+*(Unchanged from v0.2)*
 
 ---
 
-## 8. Backend (Future — Milestone 4)
+## 9. Backend (Future — Milestone 4)
 
 - **Runtime:** Node.js, TypeScript
 - **Deployment:** Vercel serverless functions
 - **Endpoints:** See `docs/API_CONTRACTS.md`
 - **AI model:** Anthropic Claude via the Messages API
-- **Rate limiting:** Per-user, per-hour request caps
-- **Secret management:** Environment variables in Vercel (never in iOS code)
+- **Milestone 1.1 addition:** `POST /import/listing` endpoint defined (implementation deferred)
 
 ---
 
-## 9. Offline Strategy
+## 10. Offline Strategy
 
 | Layer | Offline behavior |
 |-------|-----------------|
-| Main app | Full CRUD on local data; sync deferred until online |
-| App Group cache | Always available; not cleared on network loss |
-| Keyboard templates | Fully offline — no network needed |
+| Main app | Full CRUD, location picker (MapKit), local listing import — all offline |
+| `LocalListingParser` | Fully offline — no network |
+| `ClaudeListingParser` | Requires network (Milestone 4) |
+| App Group cache | Always available |
+| Keyboard templates | Fully offline |
 | Keyboard AI generation | Disabled; user sees offline indicator |
-| Supabase sync | Queued and retried when connectivity returns (future) |
 
 ---
 
-## 10. Deployment Target
+## 11. MapKit Integration
+
+- `import MapKit` is added to the `SunsetsProperties` target only.
+- No new entitlements are required for `MKLocalSearch` or coordinate display.
+- Location Services (`CLLocationManager`) is not required for Milestone 1.1. If "use my current location" is added later, `NSLocationWhenInUseUsageDescription` must be added to `Info.plist` and reviewed by a human before shipping.
+- The map picker defaults to a center coordinate (Guatemala City: 14.6349°N, 90.5069°W) when no existing location is set.
+
+---
+
+## 12. Deployment Target
 
 - iOS 17 minimum (confirmed — ADR-008).
-- iPhone only — iPad is explicitly out of scope for the MVP.
+- iPhone only. iPad out of scope.
 - No macOS Catalyst.
-- Primary interface language: Spanish for Guatemala (`es-GT`), neutral professional register.
+- Primary interface language: Spanish for Guatemala (`es-GT`).
 
 ---
 
-## 11. Key Non-Goals
+## 13. Key Non-Goals
 
 - The keyboard does not detect which application is in the foreground.
 - The keyboard does not read conversation history from the host app.
 - The keyboard does not automatically send any message.
 - The main application does not expose a public API.
 - No web or Android version in any milestone.
+- No property photos or media in any milestone through Milestone 1.1.

@@ -1,8 +1,8 @@
 # Property Schema — Sunsets AI Keyboard
 
-**Version:** 0.2 (Milestone 0 — Approved)
+**Version:** 0.3 (Milestone 1.1 — Pending approval)
 **Last updated:** 2026-06-27
-**Status:** Approved
+**Status:** Pending approval
 
 ---
 
@@ -30,32 +30,69 @@ Properties with any status other than `available` must display a warning badge i
 
 ---
 
-## 3. Full Property Model (Main Application Only)
+## 3. Internal Code Format
+
+Human-readable identifiers follow the format `SUN-###`, where `###` is a zero-padded integer.
+
+| Rule | Detail |
+|------|--------|
+| Format | `SUN-001`, `SUN-042`, `SUN-100`, etc. |
+| Generation | Determined by the highest existing number + 1 |
+| Uniqueness | Validated before saving; rejected if already in use |
+| Reuse | Deleted or inactive codes are never reused |
+| Override | An administrator may manually specify a code; uniqueness is still enforced |
+| Supabase (future) | Must generate codes atomically using a sequence or advisory lock to prevent collisions under concurrent saves. Local generation is acceptable for Milestone 1.1 (single-user, offline). |
+
+The internal code is separate from the UUID (`id`) field, which remains the immutable primary key. The code is human-readable, survives display, and is safe to include in the keyboard cache.
+
+---
+
+## 4. Location Source
+
+```swift
+enum LocationSource: String, Codable, CaseIterable {
+    case manual          // User typed the address manually
+    case mapPicker       // User selected a pin from MapKit
+    case addressSearch   // User searched for an address in MapKit
+    case googleMapsURL   // User pasted a Google Maps URL; coordinates extracted
+}
+```
+
+---
+
+## 5. Full Property Model (Main Application Only)
 
 This model lives exclusively inside the `SunsetsProperties` target. It is never written directly to the App Group.
 
 ```
 Property
-├── id: String                      // UUID, primary key
-├── internalCode: String            // Internal reference (e.g., "SUN-042")
+├── id: String                      // UUID, immutable primary key
+├── internalCode: String            // SUN-### human-readable code (see Section 3)
 ├── title: String                   // Display name (e.g., "Penthouse Torre Reforma")
 ├── operationType: OperationType    // rent | sale | rentOrSale
 ├── status: PropertyStatus          // available | reserved | rented | sold | inactive
 │
 ├── price: Decimal                  // Primary listed price
-├── currency: String                // ISO 4217 (e.g., "MXN", "USD")
+├── currency: String                // ISO 4217 (e.g., "GTQ", "USD")
 ├── maintenanceFee: Decimal?        // Monthly maintenance/HOA fee
 ├── maintenanceIncluded: Bool       // Whether fee is included in the listed price
 ├── deposit: Decimal?               // Security deposit amount
 │
-├── locationSummary: String         // Short public-facing location (e.g., "Polanco, CDMX")
-├── fullAddress: String?            // Complete address — NEVER copied to keyboard cache
+├── ── LOCATION ──
+├── locationSummary: String         // Short public-facing label (e.g., "Polanco, CDMX")
+├── publicLocationLabel: String?    // Alternate public label that may differ from locationSummary
+├── fullAddress: String?            // Complete private address — NEVER copied to keyboard cache
+├── formattedAddress: String?       // Geocoded formatted address — NEVER copied to keyboard cache
 ├── neighborhood: String?
 ├── city: String?
 ├── state: String?
-├── country: String                 // Default: "México"
-├── latitude: Double?               // For future map display
-├── longitude: Double?
+├── country: String                 // Default: "Guatemala"
+├── latitude: Double?               // GPS coordinate (shareable only when isExactLocationShareable)
+├── longitude: Double?              // GPS coordinate (shareable only when isExactLocationShareable)
+├── googleMapsURL: String?          // Universal Google Maps link (https://maps.app.goo.gl/… or
+│                                   //   https://www.google.com/maps?q=…)
+├── locationSource: LocationSource  // How the location was recorded
+├── isExactLocationShareable: Bool  // Whether latitude/longitude may appear in keyboard cache
 │
 ├── bedrooms: Int
 ├── bathrooms: Double               // Allows 1.5, 2.5, etc.
@@ -67,8 +104,10 @@ Property
 │
 ├── amenities: [String]             // e.g., ["Pool", "Gym", "Rooftop", "24h Security"]
 ├── includedAppliances: [String]    // e.g., ["Refrigerator", "Washer", "Stove"]
+├── includedItems: [String]         // Non-appliance items included (e.g., "Curtains", "Wardrobes")
+├── excludedItems: [String]         // Items present but excluded from the transaction
 │
-├── requirements: [String]          // e.g., ["Credit check", "3 months deposit", "Employment proof"]
+├── requirements: [String]          // e.g., ["Credit check", "3 months deposit"]
 ├── petPolicy: PetPolicy            // allowed | notAllowed | allowedWithDeposit | caseByCase
 ├── visitInstructions: String?      // How to schedule or access for a visit
 │
@@ -84,13 +123,13 @@ Property
 
 ---
 
-## 4. Keyboard-Safe Cache Model (Both Targets)
+## 6. Keyboard-Safe Cache Model (Both Targets)
 
-`KeyboardProperty` is a strict projection of `Property`. It contains only what the keyboard needs to display information, render templates, and provide verified context to the AI backend.
+`KeyboardProperty` is a strict projection of `Property`. It contains only what the keyboard needs.
 
 ```
 KeyboardProperty
-├── id: String                      // Matches Property.id
+├── id: String
 ├── internalCode: String
 ├── title: String
 ├── operationType: OperationType
@@ -102,10 +141,16 @@ KeyboardProperty
 ├── maintenanceIncluded: Bool
 ├── deposit: Decimal?
 │
-├── locationSummary: String         // ✅ Public-facing summary only
-│                                   // ❌ fullAddress is excluded
+├── locationSummary: String         // ✅ Public-facing summary
+├── publicLocationLabel: String?    // ✅ Alternate public label (if set)
+│                                   // ❌ fullAddress excluded
+│                                   // ❌ formattedAddress excluded
 ├── neighborhood: String?
 ├── city: String?
+├── latitude: Double?               // ✅ Only when isExactLocationShareable == true
+├── longitude: Double?              // ✅ Only when isExactLocationShareable == true
+├── googleMapsURL: String?          // ✅ Safe to share — public link only
+├── isExactLocationShareable: Bool  // ✅ Informs keyboard whether to display coordinates
 │
 ├── bedrooms: Int
 ├── bathrooms: Double
@@ -115,6 +160,8 @@ KeyboardProperty
 │
 ├── amenities: [String]
 ├── includedAppliances: [String]
+├── includedItems: [String]
+├── excludedItems: [String]
 ├── requirements: [String]
 ├── petPolicy: PetPolicy
 ├── visitInstructions: String?
@@ -123,27 +170,29 @@ KeyboardProperty
 ├── isFavorite: Bool
 │
 ├── lastVerifiedAt: Date?
-└── updatedAt: Date                 // Used to detect stale data in the keyboard
+└── updatedAt: Date
 ```
 
-**Excluded fields (never in keyboard cache — approved, ADR-008):**
+**Excluded fields (never in keyboard cache):**
 
 | Field | Reason |
 |-------|--------|
-| `fullAddress` | Privacy — keyboard is accessible from any app; `locationSummary` is sufficient |
-| `assignedAgentId` | Internal operational data; employee identity is managed separately |
-| `latitude` / `longitude` | Not needed for reply generation |
+| `fullAddress` | Privacy — exact street address must not leave the main app without explicit sharing |
+| `formattedAddress` | Privacy — geocoded full address; same risk as `fullAddress` |
+| `assignedAgentId` | Internal operational data |
+| `latitude` / `longitude` | Excluded by default; included only when `isExactLocationShareable == true` |
 | `floorNumber` / `totalFloors` | May be added later if templates require it |
-| `createdAt` | Operational metadata not relevant to the keyboard |
-| Owner information | Sensitive — not needed for reply generation |
-| Commissions / fee splits | Internal financial data; must never leave the main app |
-| Private contact details | Agent or owner phone/email; not customer-facing data |
-| Access codes / key locations | Security-critical; must never be cached outside the main app |
-| Internal admin notes | Unstructured internal data; not verified for customer use |
+| `createdAt` | Operational metadata |
+| Owner information | Sensitive |
+| Commissions / fee splits | Internal financial data |
+| Private contact details | Not customer-facing |
+| Access codes / key locations | Security-critical |
+| Internal admin notes | Unstructured internal data |
+| `locationSource` | Internal tracking metadata; not needed by keyboard |
 
 ---
 
-## 5. Supporting Types
+## 7. Supporting Types
 
 ### PetPolicy
 
@@ -161,8 +210,8 @@ enum PetPolicy: String, Codable {
 ```swift
 struct QuickReplyTemplate: Codable, Identifiable {
     let id: String
-    let label: String          // Short button label (e.g., "Price", "Visit info")
-    let bodyTemplate: String   // Template string with {{variable}} placeholders
+    let label: String
+    let bodyTemplate: String
     let category: TemplateCategory
 }
 
@@ -178,38 +227,75 @@ enum TemplateCategory: String, Codable {
 }
 ```
 
-Template variable tokens (resolved from `KeyboardProperty`):
+---
 
-| Token | Source field |
-|-------|-------------|
-| `{{title}}` | `title` |
-| `{{price}}` | `price` formatted with `currency` |
-| `{{currency}}` | `currency` |
-| `{{maintenanceFee}}` | `maintenanceFee` |
-| `{{deposit}}` | `deposit` |
-| `{{location}}` | `locationSummary` |
-| `{{bedrooms}}` | `bedrooms` |
-| `{{bathrooms}}` | `bathrooms` |
-| `{{area}}` | `areaSquareMeters` |
-| `{{parking}}` | `parkingSpaces` |
-| `{{amenities}}` | `amenities` joined |
-| `{{appliances}}` | `includedAppliances` joined |
-| `{{requirements}}` | `requirements` joined |
-| `{{petPolicy}}` | `petPolicy` human-readable |
-| `{{visitInstructions}}` | `visitInstructions` |
-| `{{status}}` | `status` human-readable |
+## 8. PropertyDraft (Listing Import)
+
+A `PropertyDraft` represents unconfirmed data extracted from a pasted listing description. It is never persisted to the property catalog until the user explicitly confirms.
+
+```
+PropertyDraft
+├── id: String                          // Temporary session ID; never stored as a Property ID
+├── sourceDescription: String           // Original pasted text, preserved verbatim
+├── parserVersion: String               // Identifies which parser produced this draft
+│
+├── title: DraftField<String>
+├── operationType: DraftField<OperationType>
+├── status: DraftField<PropertyStatus>
+├── price: DraftField<Decimal>
+├── currency: DraftField<String>
+├── deposit: DraftField<Decimal>
+├── maintenanceFee: DraftField<Decimal>
+├── maintenanceIncluded: DraftField<Bool>
+├── locationSummary: DraftField<String>
+├── bedrooms: DraftField<Int>
+├── bathrooms: DraftField<Double>
+├── parkingSpaces: DraftField<Int>
+├── floorNumber: DraftField<Int>
+├── amenities: DraftField<[String]>
+├── includedAppliances: DraftField<[String]>
+├── includedItems: DraftField<[String]>
+├── excludedItems: DraftField<[String]>
+├── requirements: DraftField<[String]>
+├── visitInstructions: DraftField<String>
+├── contactInfo: DraftField<String>     // Extracted contact — displayed for reference only
+│                                       //   Never saved to the Property model
+└── hashtags: DraftField<[String]>      // Informational only; not mapped to Property fields
+```
+
+### DraftField
+
+```swift
+struct DraftField<T: Codable>: Codable {
+    var value: T?                           // Detected value; nil if not found
+    var confidence: DraftConfidence         // How certain the parser is
+    var warning: String?                    // Human-readable warning if uncertain or missing
+}
+
+enum DraftConfidence: String, Codable {
+    case high       // Parser is confident; value shown without emphasis
+    case medium     // Parser found a candidate but context is ambiguous
+    case low        // Parser guessed; must be reviewed
+    case missing    // Field not found in the source text
+}
+```
+
+Fields with `confidence == .low` or `confidence == .missing` are highlighted in the review UI to draw the user's attention before confirming the import.
 
 ---
 
-## 6. Default System Templates
+## 9. Default System Templates
 
-In addition to property-specific templates, the keyboard provides default system templates available for any property. These are not stored in the catalog; they are rendered from the property's cached data at runtime.
+*(Unchanged from v0.2 — see below for added location tokens)*
+
+In addition to property-specific templates, the keyboard provides default system templates.
 
 | Label | Category | Example body |
 |-------|----------|--------------|
 | Price | price | "El precio de **{{title}}** es de {{price}} {{currency}} al mes." |
 | Maintenance | price | "La cuota de mantenimiento es de {{maintenanceFee}} {{currency}} mensual{{#maintenanceIncluded}} (incluida en el precio){{/maintenanceIncluded}}." |
 | Location | location | "El inmueble está ubicado en {{location}}." |
+| Location with map | location | "El inmueble está ubicado en {{location}}. Ver en mapa: {{googleMapsURL}}" |
 | Details | general | "{{title}}: {{bedrooms}} rec, {{bathrooms}} baños, {{area}} m², {{parking}} lugar(es) de estacionamiento." |
 | Amenities | amenities | "El inmueble cuenta con: {{amenities}}." |
 | Requirements | requirements | "Los requisitos son: {{requirements}}." |
@@ -218,9 +304,16 @@ In addition to property-specific templates, the keyboard provides default system
 | Visit instructions | visit | "{{visitInstructions}}" |
 | Availability | availability | "¡El inmueble está disponible! ¿Te gustaría agendar una visita?" |
 
+Additional template tokens (Milestone 1.1):
+
+| Token | Source field |
+|-------|-------------|
+| `{{publicLocation}}` | `publicLocationLabel` (falls back to `locationSummary`) |
+| `{{googleMapsURL}}` | `googleMapsURL` |
+
 ---
 
-## 7. Serialization
+## 10. Serialization
 
 The keyboard cache file is stored as JSON at:
 
@@ -235,9 +328,9 @@ All `Decimal` values are encoded as JSON numbers (not strings).
 
 ---
 
-## 8. Required Fields for Keyboard Availability
+## 11. Required Fields for Keyboard Availability
 
-A property is included in the keyboard cache only if ALL of the following fields are non-empty/non-nil and the status is not `inactive`:
+A property is included in the keyboard cache only if ALL of the following fields are non-empty/non-nil:
 
 - `title`
 - `operationType`
@@ -252,10 +345,37 @@ Properties with status `inactive` are included in the cache but clearly labeled.
 
 ---
 
-## 9. Cache Size Limit
-
-The keyboard cache must remain within practical memory limits.
+## 12. Cache Size Limit
 
 - Maximum recommended entries: 500 properties.
 - Maximum recommended cache file size: 2 MB.
-- If the catalog exceeds these limits, the main application should offer a filtered sync (e.g., only `available` and `reserved` properties).
+- Location coordinates (`latitude`, `longitude`) are small (< 50 bytes per property) and do not materially affect cache size.
+- If the catalog exceeds size limits, the main application should offer a filtered sync.
+
+---
+
+## 13. Migration — Existing Local Properties (Milestone 1.1)
+
+Properties created during Milestone 1 do not have the new fields. On first launch after upgrading:
+
+| New field | Migration default |
+|-----------|------------------|
+| `publicLocationLabel` | `nil` (falls back to `locationSummary` at display time) |
+| `formattedAddress` | `nil` |
+| `googleMapsURL` | `nil` |
+| `locationSource` | `.manual` |
+| `isExactLocationShareable` | `false` |
+| `includedItems` | `[]` |
+| `excludedItems` | `[]` |
+
+Because `LocalPropertyRepository` uses a JSON file, new optional fields decode to `nil` automatically when absent, and new non-optional fields with defaults (`locationSource: .manual`, `isExactLocationShareable: false`) require the decoder to supply a default.
+
+**Risk:** `locationSource` is a non-optional enum. The JSON decoder will fail if the key is absent and no default is provided. Mitigation: make `locationSource` optional (`LocationSource?`) in the Codable model and resolve to `.manual` at the service layer, or provide a custom `init(from:)` decoder with a default.
+
+---
+
+## 14. Property Media — Out of Scope
+
+Property photographs, cover images, albums, media storage, and image-sharing are explicitly deferred. No image-related fields are added to `Property` or `KeyboardProperty` in Milestone 1.1.
+
+This decision is recorded in ADR-013 in `docs/DECISIONS.md`.

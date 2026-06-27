@@ -1,8 +1,8 @@
 # Testing Strategy — Sunsets AI
 
-**Version:** 0.2 (Milestone 0 — Approved)
+**Version:** 0.3 (Milestone 1.1 — Pending approval)
 **Last updated:** 2026-06-27
-**Status:** Approved
+**Status:** Pending approval
 
 ---
 
@@ -35,6 +35,10 @@
 - Verify that a property with status `rented` or `sold` does not produce an availability-confirming template body.
 - Verify that custom `QuickReplyTemplate` placeholders resolve correctly.
 - Verify that templates with unknown tokens fall back gracefully (do not crash).
+- Verify that `{{googleMapsURL}}` resolves to the URL string when `googleMapsURL` is set.
+- Verify that `{{googleMapsURL}}` is omitted or replaced with a fallback when `googleMapsURL` is nil.
+- Verify that `{{publicLocation}}` resolves to `publicLocationLabel` when set.
+- Verify that `{{publicLocation}}` falls back to `locationSummary` when `publicLocationLabel` is nil.
 
 ### 2.3 Intent Classifier Tests (`SunsetsAIKeyboardTests`)
 
@@ -57,7 +61,73 @@
 
 ---
 
-## 3. App Group Serialization Tests
+## 3. Milestone 1.1 Unit Tests
+
+### 3.1 InternalCodeGenerator Tests (`SunsetsPropertiesTests`)
+
+- Verify that `nextCode(existingCodes: [])` returns `"SUN-001"` when no properties exist.
+- Verify that `nextCode(existingCodes: ["SUN-001", "SUN-002"])` returns `"SUN-003"`.
+- Verify that `nextCode` skips gaps — `["SUN-001", "SUN-003"]` → `"SUN-004"` (always takes max+1, not fills gaps).
+- Verify that `nextCode` handles non-contiguous codes correctly.
+- Verify that `nextCode` pads to at least 3 digits: `"SUN-009"` → `"SUN-010"`, `"SUN-099"` → `"SUN-100"`.
+- Verify that `isUnique("SUN-005", existingCodes: ["SUN-001"])` returns `true`.
+- Verify that `isUnique("SUN-001", existingCodes: ["SUN-001"])` returns `false`.
+- Verify that after deleting a property with code `"SUN-002"`, `nextCode(existingCodes: ["SUN-001", "SUN-003"])` still returns `"SUN-004"` (not `"SUN-002"`).
+
+### 3.2 GoogleMapsURLImporter Tests (`SunsetsPropertiesTests`)
+
+- Verify that `parse("https://www.google.com/maps?q=14.6349,-90.5069")` returns `(14.6349, -90.5069)`.
+- Verify that `parse("https://www.google.com/maps/place/@14.6349,-90.5069,17z")` extracts coordinates.
+- Verify that `parse("https://maps.app.goo.gl/abc123")` is recognized as a short link (returns a result with a non-nil `requiresResolution` flag or resolves synchronously in tests via a mock).
+- Verify that `parse("https://example.com/not-maps")` returns `nil`.
+- Verify that `parse("")` returns `nil`.
+- Verify that `parse("not a url")` returns `nil`.
+- Verify that coordinates with negative latitude/longitude (Southern/Western hemisphere) parse correctly.
+
+### 3.3 LocalListingParser Tests (`SunsetsPropertiesTests`)
+
+- Verify that a listing with "Q15,000/mes" or "Q 15,000" produces `price.value = 15000` and `currency.value = "GTQ"` with `high` or `medium` confidence.
+- Verify that a listing with "USD 2,500" produces `price.value = 2500` and `currency.value = "USD"`.
+- Verify that "3 recámaras" or "3 habitaciones" produces `bedrooms.value = 3`.
+- Verify that "3.5 baños" produces `bathrooms.value = 3.5`.
+- Verify that "2 estacionamientos" produces `parkingSpaces.value = 2`.
+- Verify that "en venta" produces `operationType.value = .sale`.
+- Verify that "en renta" or "en alquiler" produces `operationType.value = .rent`.
+- Verify that a listing with no price detected produces `price.confidence = .missing`.
+- Verify that a listing with ambiguous price produces `price.confidence = .low` or `.medium`.
+- Verify that `contactInfo` is extracted when a phone number is present but produces a `DraftField` with non-nil value.
+- Verify that `sourceDescription` in the resulting `PropertyDraft` matches the input string verbatim.
+
+### 3.4 PropertyDraft Tests (`SunsetsPropertiesTests`)
+
+- Verify that a `PropertyDraft` round-trips through JSON encoding and decoding without data loss.
+- Verify that `DraftField<Decimal>` encodes `nil` value and `missing` confidence correctly.
+- Verify that `DraftField<[String]>` encodes and decodes an array value correctly.
+- Verify that `DraftConfidence` raw values match expected strings.
+
+### 3.5 CatalogCacheService Location Projection Tests (`SunsetsPropertiesTests`)
+
+- Verify that when `isExactLocationShareable == true`, the resulting `KeyboardProperty` contains `latitude` and `longitude`.
+- Verify that when `isExactLocationShareable == false`, the resulting `KeyboardProperty` has `latitude == nil` and `longitude == nil`, even if the source `Property` has non-nil values.
+- Verify that `googleMapsURL` is included in `KeyboardProperty` when set.
+- Verify that `googleMapsURL` is `nil` in `KeyboardProperty` when the source `Property` has `nil`.
+- Verify that `fullAddress` is never present in the projected `KeyboardProperty`.
+- Verify that `formattedAddress` is never present in the projected `KeyboardProperty`.
+- Verify that `publicLocationLabel` is included in `KeyboardProperty` when set.
+- Verify that `locationSource` is not present in the projected `KeyboardProperty`.
+
+### 3.6 Migration Decoder Tests (`SunsetsPropertiesTests`)
+
+- Verify that a `Property` JSON object without `locationSource` decodes successfully with a default of `.manual` (or that the field is optional and resolves to `.manual` in the service layer).
+- Verify that a `Property` JSON object without `isExactLocationShareable` decodes successfully with a default of `false`.
+- Verify that a `Property` JSON object without `includedItems` decodes with `includedItems == []`.
+- Verify that a `Property` JSON object without `excludedItems` decodes with `excludedItems == []`.
+- Verify that a `Property` JSON object without `publicLocationLabel` decodes with `publicLocationLabel == nil`.
+- Verify that a `Property` JSON object without `googleMapsURL` decodes with `googleMapsURL == nil`.
+
+---
+
+## 4. App Group Serialization Tests
 
 These tests verify the contract between the main application and the keyboard extension.
 
@@ -69,10 +139,12 @@ These tests verify the contract between the main application and the keyboard ex
 - Verify that `active_property_id` written by the keyboard is readable by the main app and vice versa.
 - Verify that `recent_property_ids` maintains FIFO order capped at 5 entries.
 - Verify that writing an empty catalog (zero properties) does not crash the reader.
+- Verify that a `KeyboardProperty` with `googleMapsURL` set round-trips through App Group JSON correctly.
+- Verify that a `KeyboardProperty` with `latitude` and `longitude` (when `isExactLocationShareable == true`) round-trips correctly.
 
 ---
 
-## 4. Keyboard Insertion Tests
+## 5. Keyboard Insertion Tests
 
 - Verify that `textDocumentProxy.insertText()` is called exactly once per Insert tap.
 - Verify that the inserted string matches the previewed response exactly.
@@ -82,17 +154,18 @@ These tests verify the contract between the main application and the keyboard ex
 
 ---
 
-## 5. Offline Tests
+## 6. Offline Tests
 
 - Verify that the keyboard loads the cached catalog when no network is available.
 - Verify that deterministic template responses are generated when offline.
 - Verify that the AI generate button is disabled when offline.
 - Verify that the offline indicator is visible when the network is unavailable.
 - Verify that re-establishing network connectivity re-enables the AI generate button.
+- Verify that listing import via `LocalListingParser` works offline (no network call is made).
 
 ---
 
-## 6. Stale Cache Tests
+## 7. Stale Cache Tests
 
 - Verify that a cache written more than 24 hours ago triggers the stale-data warning badge.
 - Verify that a cache written within 24 hours does not trigger the warning.
@@ -101,7 +174,7 @@ These tests verify the contract between the main application and the keyboard ex
 
 ---
 
-## 7. Active Property Switching Tests
+## 8. Active Property Switching Tests
 
 - Verify that selecting a different property updates the active property bar immediately.
 - Verify that quick actions reflect the newly selected property's data after switching.
@@ -112,7 +185,46 @@ These tests verify the contract between the main application and the keyboard ex
 
 ---
 
-## 8. Manual Testing: Notes Application (Simulator or Device)
+## 9. Manual Testing: Milestone 1.1 Acceptance
+
+Before completing Milestone 1.1, the following manual tests must be performed:
+
+**Internal codes:**
+- [ ] Create a new property. Confirm it is pre-filled with the next `SUN-###` code.
+- [ ] Try to save a property with an existing code. Confirm the save is rejected with an error message.
+- [ ] Delete a property with code `SUN-003`. Create a new one. Confirm it gets `SUN-007` (or max+1), not `SUN-003`.
+- [ ] Override the proposed code manually. Confirm the next property gets max+1 from the new code.
+
+**Location picker:**
+- [ ] Open the property editor for a new property. Tap "Seleccionar ubicación en mapa". Confirm a MapKit map appears.
+- [ ] Drag the pin to a location. Tap confirm. Confirm the property now shows `latitude` and `longitude` populated.
+- [ ] Search for an address ("Zona 10, Guatemala"). Select a result. Confirm `formattedAddress` and coordinates populate.
+- [ ] Paste a Google Maps URL into the URL field. Confirm coordinates and `googleMapsURL` are stored.
+- [ ] Enable `isExactLocationShareable`. Save the property. Inspect the catalog (via debug) to confirm coordinates appear in the keyboard cache.
+- [ ] Disable `isExactLocationShareable`. Save. Confirm coordinates are absent from the keyboard cache.
+- [ ] Confirm `fullAddress` is never visible in the keyboard cache or the `KeyboardProperty` model.
+
+**Listing import:**
+- [ ] Tap "Importar descripción" in the catalog. Paste a sample property description in Spanish.
+- [ ] Confirm a draft review screen appears with detected fields and confidence levels.
+- [ ] Confirm fields with `low` or `missing` confidence are visually highlighted.
+- [ ] Confirm contact info (if any) is visible in the draft but marked as "reference only".
+- [ ] Tap "Descartar". Confirm no property was added to the catalog.
+- [ ] Repeat the import. Correct all highlighted fields. Tap "Confirmar y crear propiedad". Confirm the property appears in the catalog.
+- [ ] Confirm the saved property does not contain the original listing text or any contact info.
+
+**Migration:**
+- [ ] Build and run the Milestone 1.1 version on top of an existing Milestone 1 database. Confirm all 6 seed properties load without error.
+- [ ] Confirm each existing property has `locationSource = .manual` (or nil resolved to manual), `isExactLocationShareable = false`, `includedItems = []`, `excludedItems = []`.
+
+**Exclusions:**
+- [ ] Confirm no `PhotosPicker` or camera button is visible anywhere in the app.
+- [ ] Confirm no "Photos" or "Camera" permission dialog appears.
+- [ ] Confirm no network requests are made during `LocalListingParser` import (verify with Charles Proxy or offline mode).
+
+---
+
+## 10. Manual Testing: Notes Application (Simulator or Device)
 
 Use the iOS Notes app to test basic keyboard behavior in a low-risk environment before testing in production messaging apps.
 
@@ -129,7 +241,7 @@ Use the iOS Notes app to test basic keyboard behavior in a low-risk environment 
 
 ---
 
-## 9. Manual Testing: Messenger
+## 11. Manual Testing: Messenger
 
 - [ ] Open Messenger. Switch to SunsetsAIKeyboard.
 - [ ] Select a property. Confirm the active property bar is correct.
@@ -141,7 +253,7 @@ Use the iOS Notes app to test basic keyboard behavior in a low-risk environment 
 
 ---
 
-## 10. Manual Testing: WhatsApp
+## 12. Manual Testing: WhatsApp
 
 Same checklist as Messenger above, executed in WhatsApp.
 
@@ -152,7 +264,7 @@ Same checklist as Messenger above, executed in WhatsApp.
 
 ---
 
-## 11. Manual Testing: Facebook Marketplace
+## 13. Manual Testing: Facebook Marketplace
 
 - [ ] Open a Marketplace listing conversation.
 - [ ] Switch to SunsetsAIKeyboard.
@@ -162,7 +274,7 @@ Same checklist as Messenger above, executed in WhatsApp.
 
 ---
 
-## 12. Physical Device Requirements
+## 14. Physical Device Requirements
 
 The following tests cannot be performed reliably on the iOS Simulator:
 
@@ -180,32 +292,37 @@ Every milestone that includes keyboard extension changes must be verified on a p
 
 ---
 
-## 13. Test File Organization (Proposed)
+## 15. Test File Organization (Proposed, Milestone 1.1 additions)
 
 ```
 SunsetsAIKeyboardTests/
 ├── Models/
 │   └── PropertySchemaTests.swift
 ├── AppGroup/
-│   ├── CatalogCacheServiceTests.swift
+│   ├── CatalogCacheServiceTests.swift      # Updated for location projection
 │   └── AppGroupStoreTests.swift
 ├── Services/
-│   ├── TemplateEngineTests.swift
+│   ├── TemplateEngineTests.swift           # Updated for {{googleMapsURL}}, {{publicLocation}}
 │   ├── IntentClassifierTests.swift
 │   └── PropertySearchTests.swift
-└── Keyboard/
-    └── TextInsertionTests.swift
 
 SunsetsPropertiesTests/
 ├── Models/
-│   └── PropertyValidationTests.swift
-└── Repositories/
-    └── MockPropertyRepositoryTests.swift
+│   ├── PropertyValidationTests.swift
+│   └── PropertyDraftTests.swift            # NEW (Milestone 1.1)
+├── Repositories/
+│   └── MockPropertyRepositoryTests.swift
+└── Services/
+    ├── InternalCodeGeneratorTests.swift    # NEW (Milestone 1.1)
+    ├── GoogleMapsURLImporterTests.swift    # NEW (Milestone 1.1)
+    ├── LocalListingParserTests.swift       # NEW (Milestone 1.1)
+    ├── CatalogCacheProjectionTests.swift   # NEW (Milestone 1.1)
+    └── MigrationDecoderTests.swift        # NEW (Milestone 1.1)
 ```
 
 ---
 
-## 14. CI Considerations (Future)
+## 16. CI Considerations (Future)
 
 - Unit and integration tests should run in CI on every pull request.
 - Physical-device tests are gated to milestone completion; they are not part of per-PR CI.

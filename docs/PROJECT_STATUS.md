@@ -1,15 +1,15 @@
 # Project Status — Sunsets AI
 
 **Last updated:** 2026-06-27
-**Current milestone:** Milestone 2 — Local SunsetsAIKeyboard Extension
+**Current milestone:** Milestone 1.1 — Property Enrichment and Import (Pending approval)
 
 ---
 
 ## Current Phase
 
-Milestone 1 is **approved and complete**. The local Sunsets Properties SwiftUI application was manually validated by Nox on 2026-06-27. All acceptance criteria confirmed on iPhone Simulator.
+Milestone 1 is **approved and complete** (2026-06-27). The local Sunsets Properties SwiftUI application was manually validated by Nox on 2026-06-27. All acceptance criteria confirmed on iPhone Simulator.
 
-Milestone 2 is ready to begin after the SunsetsAIKeyboard extension target is created and validated.
+Milestone 1.1 documentation has been written and is **pending Nox's review and approval** before implementation begins. No application code has been written for Milestone 1.1.
 
 ---
 
@@ -55,26 +55,95 @@ Milestone 2 is ready to begin after the SunsetsAIKeyboard extension target is cr
 - [x] UI tests: launch and launch-performance — pass
 - [x] Build: `** BUILD SUCCEEDED **` for iPhone 17 Pro Simulator
 
+### Milestone 1.1 — Property Enrichment and Import 📋 Documentation Pending Approval
+
+- [x] `docs/PRODUCT_SPEC.md` updated — structured location, auto codes, listing import, media deferred
+- [x] `docs/ARCHITECTURE.md` updated — MapKit, new services, updated data flows, updated layer structure
+- [x] `docs/PROPERTY_SCHEMA.md` updated — new location fields, `LocationSource`, `PropertyDraft`, `DraftField<T>`, `DraftConfidence`, migration table, SUN-### code format
+- [x] `docs/DECISIONS.md` updated — ADR-009 through ADR-013
+- [x] `docs/MILESTONES.md` updated — Milestone 1.1 inserted with full scope, acceptance criteria, risks, required human actions
+- [x] `docs/SECURITY_AND_PRIVACY.md` updated — location privacy, listing import data minimization
+- [x] `docs/TESTING.md` updated — Milestone 1.1 unit and manual test requirements
+- [x] `docs/API_CONTRACTS.md` updated — `POST /import/listing` contract (implementation deferred to Milestone 4)
+- [x] `docs/PROJECT_STATUS.md` updated — current status reflects documentation phase
+
 ---
 
 ## Pending Work
 
-### Milestone 2 — Local SunsetsAIKeyboard Extension
+### Milestone 1.1 — Property Enrichment and Import (Implementation Blocked on Approval)
 
-All Milestone 2 work is pending. See `docs/MILESTONES.md` for full scope.
+All Milestone 1.1 implementation is pending. See `docs/MILESTONES.md` for full scope.
 
-**Waiting for:** SunsetsAIKeyboard extension target creation and validation before beginning feature implementation.
+**Waiting for:** Nox's review and approval of Milestone 1.1 documentation before implementation begins.
+
+Key implementation tasks (not to start until approved):
+- [ ] Add new fields to `Property` model: `publicLocationLabel`, `formattedAddress`, `googleMapsURL`, `locationSource`, `isExactLocationShareable`, `includedItems`, `excludedItems`
+- [ ] Implement `LocationSource` enum (`Models/LocationSource.swift`)
+- [ ] Update `LocalPropertyRepository` decoder with migration defaults
+- [ ] Implement `InternalCodeGenerator` service
+- [ ] Update `PropertyEditorViewModel` to propose next code and validate uniqueness
+- [ ] Implement `LocationImportService` (Google Maps URL parser and `MKLocalSearch` wrapper)
+- [ ] Build `LocationPickerView` with MapKit map and address search
+- [ ] Implement `PropertyDraft`, `DraftField<T>`, `DraftConfidence` models
+- [ ] Implement `ListingImportService` protocol and `LocalListingParser`
+- [ ] Add `ClaudeListingParser` stub (protocol conformance, no implementation)
+- [ ] Build `ListingImportView` and `DraftReviewView`
+- [ ] Update `CatalogCacheService` to project new location fields with `isExactLocationShareable` gate
+- [ ] Update all new unit tests (see `docs/TESTING.md` Section 3)
+- [ ] Manual acceptance testing per `docs/TESTING.md` Section 9
 
 ---
 
 ## Known Blockers
 
-1. **Apple Developer portal** — The following must be registered before the first Xcode build on a real device:
+1. **Milestone 1.1 documentation approval** — Implementation must not begin until Nox has reviewed and explicitly approved the Milestone 1.1 documentation.
+
+2. **Apple Developer portal** — The following must be registered before the first Xcode build on a real device:
    - App Group: `group.com.sunsetsrealestate.sunsetsai`
    - Bundle ID (main app): `com.sunsetsrealestate.sunsetsproperties`
    - Bundle ID (keyboard): `com.sunsetsrealestate.sunsetsproperties.keyboard`
 
-2. **Test target deployment targets** — `SunsetsPropertiesTests` and `SunsetsPropertiesUITests` targets have `IPHONEOS_DEPLOYMENT_TARGET = 26.5` (inheriting from project level). Correction recommended: set to iOS 17.0 in Xcode to match the main target. Non-blocking for Simulator work on macOS 26.
+3. **Test target deployment targets** — `SunsetsPropertiesTests` and `SunsetsPropertiesUITests` targets have `IPHONEOS_DEPLOYMENT_TARGET = 26.5` (inheriting from project level). Correction recommended: set to iOS 17.0 in Xcode to match the main target. Non-blocking for Simulator work on macOS 26.
+
+4. **`locationSource` migration risk** — `locationSource` is a non-optional enum in the schema. Existing Milestone 1 properties have no `locationSource` key in their JSON. The `LocalPropertyRepository` decoder must handle this via a custom `init(from:)` with a `.manual` default, or `locationSource` must be made optional (`LocationSource?`) in the Codable model. This must be resolved during implementation before any existing data is touched.
+
+---
+
+## Schema Changes (Milestone 1.1 — Pending Approval)
+
+### New `Property` fields
+
+| Field | Type | Default | Migration |
+|-------|------|---------|-----------|
+| `publicLocationLabel` | `String?` | `nil` | Auto (optional) |
+| `formattedAddress` | `String?` | `nil` | Auto (optional) |
+| `googleMapsURL` | `String?` | `nil` | Auto (optional) |
+| `locationSource` | `LocationSource` | `.manual` | Requires custom decoder |
+| `isExactLocationShareable` | `Bool` | `false` | Requires custom decoder |
+| `includedItems` | `[String]` | `[]` | Requires custom decoder |
+| `excludedItems` | `[String]` | `[]` | Requires custom decoder |
+
+`latitude` and `longitude` existed in the schema but now have a defined UI for setting them.
+
+### New `KeyboardProperty` fields
+
+| Field | Condition |
+|-------|-----------|
+| `publicLocationLabel: String?` | Always projected (when set) |
+| `googleMapsURL: String?` | Always projected (when set) |
+| `isExactLocationShareable: Bool` | Always projected |
+| `latitude: Double?` | Only when `isExactLocationShareable == true` |
+| `longitude: Double?` | Only when `isExactLocationShareable == true` |
+| `includedItems: [String]` | Always projected |
+| `excludedItems: [String]` | Always projected |
+
+### New top-level types
+
+- `LocationSource` enum (`.manual`, `.mapPicker`, `.addressSearch`, `.googleMapsURL`)
+- `PropertyDraft` struct
+- `DraftField<T>` generic struct
+- `DraftConfidence` enum (`.high`, `.medium`, `.low`, `.missing`)
 
 ---
 
@@ -94,6 +163,12 @@ All Milestone 2 work is pending. See `docs/MILESTONES.md` for full scope.
 | Local persistence (Milestone 1) | JSON file in Application Support + UserDefaults |
 | Test framework for unit tests | Swift Testing (`import Testing`) |
 | Test framework for UI tests | XCTest |
+| Map provider (Milestone 1.1) | MapKit only — no Google Maps SDK, no Google API key |
+| Google Maps URL format | `google.com/maps?q={lat},{lon}` (generated); `maps.app.goo.gl/…` (accepted from paste) |
+| Property media | Deferred — no media fields in any milestone through Milestone 1.1 (ADR-013) |
+| Listing import (Milestone 1.1) | Local parser only; AI parser stub only (ADR-012) |
+| SUN-### code reuse | Deleted/inactive codes are never reused (ADR-011) |
+| Exact coordinates in keyboard cache | Opt-in only; default is private (ADR-009) |
 
 ---
 
@@ -107,6 +182,8 @@ All Milestone 2 work is pending. See `docs/MILESTONES.md` for full scope.
 | Data retention policy | Milestone 5 | How long backend AI logs are kept |
 | Remote crash logging provider | Milestone 5 | Provider and data exclusions to be decided |
 | Privacy policy | Milestone 6 | Must be live before external TestFlight or public distribution |
+| "Use my current location" in map picker | Post–Milestone 1.1 | Requires Location Services permission review |
+| Listing import PII check for `ClaudeListingParser` | Milestone 4 | Must confirm no customer PII in listing text before sending to backend |
 
 ---
 
@@ -119,9 +196,10 @@ All Milestone 2 work is pending. See `docs/MILESTONES.md` for full scope.
 5. One organization: Sunsets Real Estate. Multi-tenant is out of scope.
 6. Anthropic Messages API is used for AI generation.
 7. Agents may be bilingual; customer messages are expected primarily in Spanish (Guatemala).
+8. Google Maps is the dominant navigation app used by agents and customers in Guatemala (informs URL format choice).
 
 ---
 
 ## Next Exact Task
 
-> **Create and validate the SunsetsAIKeyboard Custom Keyboard Extension target before implementing Milestone 2.**
+> **Review and approve Milestone 1.1 documentation before implementation.**

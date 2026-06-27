@@ -1,8 +1,8 @@
 # Product Specification — Sunsets AI Keyboard
 
-**Version:** 0.2 (Milestone 0 — Approved)
+**Version:** 0.3 (Milestone 1.1 — Pending approval)
 **Last updated:** 2026-06-27
-**Status:** Approved
+**Status:** Pending approval
 
 ---
 
@@ -25,6 +25,7 @@
 2. Ensure every message sent to a customer is based solely on verified, up-to-date property data — never on recalled or invented facts.
 3. Keep the agent in control: no message is ever sent without the agent reviewing and manually submitting it.
 4. Work inside the messaging apps agents already use (Messenger, WhatsApp, Facebook Marketplace) without requiring them to switch apps.
+5. Reduce manual data entry through text import with human review.
 
 ---
 
@@ -33,6 +34,7 @@
 ### Administrator
 - Creates and manages the property catalog.
 - Sets prices, statuses, availability, requirements, and visit instructions.
+- Imports property listings via text paste.
 - Manages agent accounts (future, Milestone 5).
 - Uses the **Sunsets Properties** main application.
 
@@ -53,17 +55,73 @@ Administrators and agents with edit rights may:
 - **Edit** any field of an existing property.
 - **Set status** to `available`, `reserved`, `rented`, `sold`, or `inactive`.
 - **Set prices:** rent or sale price, currency, maintenance fee, deposit.
-- **Add property details:** bedrooms, bathrooms, parking, area, location summary.
+- **Add property details:** bedrooms, bathrooms, parking, area, location.
 - **Add amenities:** pool, gym, rooftop, parking type, and similar.
-- **Add appliances:** which appliances are included with the property.
+- **Add appliances and included/excluded items.**
 - **Set requirements:** credit check, employment proof, income multiplier, etc.
 - **Set pet policy:** allowed, not allowed, allowed with deposit, or case-by-case.
 - **Add visit instructions:** how to schedule, who to contact, access notes.
 - **Create quick-reply templates** scoped to a specific property.
 - **Search and filter** the catalog by title, status, price range, operation type, or location.
 - **Mark a property as a favorite** for quick access from the keyboard.
+- **Import a listing description** via text paste (Milestone 1.1).
+- **Select a location on a map** or search for an address (Milestone 1.1).
+- **Control location sharing** — decide whether exact coordinates are visible in the keyboard cache (Milestone 1.1).
 
-### 3.2 Validation Before Keyboard Availability
+### 3.2 Automatic Internal Codes
+
+Internal codes follow the format `SUN-###`. The application automatically proposes the next code when a new property is created. The agent may accept or override it.
+
+Requirements:
+- The proposed code is determined by scanning all existing codes and incrementing the highest numeric suffix.
+- Codes from deleted or inactive properties are never reused.
+- Uniqueness is validated before saving; a duplicate is rejected with an error.
+- When Supabase is introduced (Milestone 5), code generation must move to the database to prevent multi-user collisions.
+
+### 3.3 Structured Location (Milestone 1.1)
+
+Location data is split into a private component and a public component:
+
+**Private (main app only):**
+- `fullAddress` — complete street address.
+- `formattedAddress` — geocoded formatted address from MapKit.
+
+**Public (may reach keyboard cache):**
+- `locationSummary` — existing short public label (e.g., "Zona 10, Guatemala").
+- `publicLocationLabel` — alternate public label that may differ from `locationSummary`.
+- `googleMapsURL` — shareable Google Maps link.
+- `latitude` / `longitude` — only when `isExactLocationShareable == true`.
+
+Location may be set by:
+
+1. **Map picker** — drag a pin on a MapKit map.
+2. **Address search** — type a query, select from `MKLocalSearch` results.
+3. **Google Maps URL paste** — paste a Google Maps link; the app extracts and stores the coordinates.
+4. **Manual text entry** — type `locationSummary` by hand (existing behavior).
+
+No Google Maps SDK is used. Google Maps URLs are generated from coordinates without an API key.
+
+### 3.4 Listing Text Import (Milestone 1.1)
+
+An import workflow allows administrators to paste a full real-estate listing description and receive a structured draft for review.
+
+Steps:
+1. Administrator taps **Importar descripción**.
+2. Pastes a listing description into the text area.
+3. Application runs `LocalListingParser`, which returns a `PropertyDraft`.
+4. The draft review screen shows detected fields alongside their confidence level (high / medium / low / missing).
+5. Fields with low or missing confidence are highlighted.
+6. Administrator corrects any field directly in the review screen.
+7. Administrator taps **Confirmar y crear propiedad** — the property is saved.
+8. Tapping **Descartar** discards the draft with no changes.
+
+The original listing text (`sourceDescription`) is displayed alongside the draft for comparison.
+
+Contact information extracted from the listing is shown for reference only and is never saved to the `Property` model.
+
+A future AI-assisted parser (`ClaudeListingParser`) will be added in Milestone 4 and will call the backend; it will never be called directly from the iOS app.
+
+### 3.5 Validation Before Keyboard Availability
 
 A property is not pushed to the keyboard-safe App Group cache unless all of the following fields are populated:
 
@@ -74,170 +132,121 @@ A property is not pushed to the keyboard-safe App Group cache unless all of the 
 - `locationSummary`
 - `bedrooms` and `bathrooms`
 
-Properties with status `inactive` are included in the cache but clearly labeled and must not generate availability confirmations.
+Properties with status `inactive` are included in the cache but clearly labeled. They cannot generate availability confirmations.
 
-### 3.3 Active Property Selection
+### 3.6 Active Property Selection
 
-- An administrator or agent may designate any catalog property as the **active property** from within the main application.
+- An administrator or agent may designate any catalog property as the **active property**.
 - Selecting an active property writes the property's ID to the shared App Group.
 - The keyboard reads the active property ID from the App Group on launch.
 
-### 3.4 Synchronization (Future — Milestone 5)
+### 3.7 Synchronization (Future — Milestone 5)
 
-- The main application pulls the canonical property catalog from Supabase.
-- After a successful sync, the application rebuilds the keyboard-safe App Group cache.
-- The application stores a catalog version token to enable incremental sync.
+The main application pulls the canonical property catalog from Supabase. After a successful sync, it rebuilds the keyboard-safe App Group cache.
 
 ---
 
 ## 4. SunsetsAIKeyboard — Keyboard Extension
 
+*(Unchanged from v0.2 — all keyboard behavior is defined in Milestone 2.)*
+
+The keyboard remains text-oriented. No property image display, photo sharing, or media access is added to the keyboard in any milestone through Milestone 1.1.
+
 ### 4.1 Activation
 
-The keyboard cannot be activated automatically. The user must:
-
-1. Install the Sunsets Properties application.
-2. Open iOS Settings → General → Keyboard → Keyboards → Add New Keyboard.
-3. Select **SunsetsAIKeyboard**.
-4. Grant **Full Access** when prompted (required for App Group access and network calls).
-5. Manually switch to the keyboard inside a conversation using the iOS keyboard selector (globe icon).
-
-The main application must include an in-app setup guide explaining these steps.
+The keyboard cannot be activated automatically. The user must enable it in iOS Settings and grant Full Access.
 
 ### 4.2 Home Screen Layout
 
-When the keyboard opens, the user sees:
-
-- **Active property bar** (always visible): displays the selected property's title, operation type, price, and status.
-- **Recently used properties** (up to 5, persisted in App Group).
-- **Favorite properties** (persisted as `isFavorite` in the App Group cache).
-- **Property search field**.
-- **Quick action buttons** for the active property.
-- **Customer message import** button (explicit clipboard paste).
-- **AI generate** button (only enabled when an active property is selected).
+- Active property bar (always visible): title, operation type, price, status.
+- Recently used properties (up to 5).
+- Favorite properties.
+- Property search field.
+- Quick action buttons.
+- Customer message import button.
+- AI generate button (only enabled when connected and a property is selected).
 
 ### 4.3 Property Selection
 
-- The user can search and select any cached property without leaving the keyboard.
-- Selecting a property:
-  1. Sets it as the active property in the App Group.
-  2. Updates the active property bar immediately.
-  3. Adds it to the recently used list.
-- The active property persists across keyboard sessions until the user changes it.
-- Properties with status `inactive`, `rented`, or `sold` are shown with a visual warning badge. They may be selected but the keyboard will not generate availability confirmations for them.
-- The keyboard warns the user if the cached property data is more than 24 hours old.
+Standard keyboard property selection. Selecting an active property with a non-available status shows a warning badge.
 
 ### 4.4 Customer Message Import
 
-- The user explicitly taps **Import from clipboard** to paste the customer's message.
-- The keyboard never reads the clipboard automatically or in the background.
-- The imported message is shown in a dedicated text area for the agent to review before generating a reply.
-- The imported message is used only for the current generation request. It is not stored persistently.
+Explicit user tap only. No background clipboard monitoring.
 
 ### 4.5 Response Generation
 
-#### Deterministic Templates (First Choice)
-
-For questions that map to verified property facts, the keyboard selects or renders a property-specific quick-reply template:
-
-- Price
-- Location summary
-- Availability
-- Bedrooms, bathrooms, area
-- Amenities
-- Included appliances
-- Requirements
-- Pet policy
-- Visit scheduling instructions
-
-Templates are rendered locally using the cached property data. No network call is made.
-
-#### AI-Assisted Generation (Second Choice)
-
-The keyboard calls the backend AI service when:
-
-- The customer's intent is ambiguous and does not match a deterministic template.
-- The agent requests a different tone (formal, friendly, concise).
-- Multiple verified facts need to be combined naturally.
-- The agent explicitly taps **Generate with AI**.
-
-The backend receives:
-
-- Authorized user identifier.
-- Selected property (keyboard-safe fields only).
-- The explicitly imported customer message.
-- Requested response style.
-- No other context.
-
-The AI response is displayed inside the keyboard for review. It is never inserted automatically.
-
-#### Negotiation and Unknown Intents
-
-If the customer is asking about price negotiation or the intent cannot be classified, the keyboard flags the message as requiring human judgment and does not generate a response.
+- **Deterministic templates** (first choice): rendered locally from the cached `KeyboardProperty`, including new `{{googleMapsURL}}` and `{{publicLocation}}` tokens when set.
+- **AI-assisted generation** (second choice, Milestone 4): via backend.
+- **Negotiation / unknown**: flagged for human handling.
 
 ### 4.6 Text Insertion
 
-- The agent reviews the generated response in the keyboard preview area.
-- The agent taps **Insert** to place the text into the conversation input field via `textDocumentProxy.insertText()`.
-- The keyboard never sends the message. The agent must send it manually in the host app.
+`textDocumentProxy.insertText()`. Agent must tap Send in the host app.
 
 ### 4.7 Quick Actions
 
-For the active property, the keyboard exposes one-tap quick actions:
-
-- Share price
-- Share location summary
-- Share availability status
-- Share visit instructions
-- Share requirement list
-- Share amenity list
-
-Each quick action renders a pre-formatted string from the cached property data and inserts it directly without calling the backend.
+One-tap actions: share price, location, availability, visit instructions, requirements, amenities. In Milestone 2+, a "Share Google Maps link" quick action is added when `googleMapsURL` is set.
 
 ---
 
-## 5. Offline Behavior
+## 5. Property Media — Out of Scope
+
+Property photographs, albums, gallery URLs, cover photos, and image sharing are explicitly out of scope through Milestone 1.1. This includes:
+
+- No `PhotosPicker` or `UIImagePickerController`.
+- No Photos Library permission request.
+- No image binary data in local storage.
+- No image fields in `Property` or `KeyboardProperty`.
+- No media fields in the keyboard cache.
+- No Supabase Storage for images.
+- No photo or album sharing in the keyboard.
+
+A separate architectural review and dedicated milestone are required before any media work begins. See ADR-013.
+
+---
+
+## 6. Offline Behavior
 
 - The keyboard functions fully offline for deterministic template responses.
-- AI generation requires network access. The keyboard displays a clear offline indicator and disables the AI generate button when offline.
+- AI generation requires network access.
+- Listing import uses `LocalListingParser` offline. `ClaudeListingParser` requires network (Milestone 4+).
 - The App Group cache remains available indefinitely until the main application overwrites it.
 
 ---
 
-## 6. State Inventory
+## 7. State Inventory
 
 | State | User-visible behavior |
 |-------|----------------------|
-| No active property | Active property bar shows "No property selected". Quick actions and AI generate are disabled. |
+| No active property | Active property bar shows "No hay propiedad activa". Quick actions and AI generate are disabled. |
 | Property selected, data fresh | Normal operation. |
 | Property selected, data stale (>24 h) | Warning badge on active property bar. Templates still available. |
 | Property inactive / rented / sold | Warning badge. Quick actions available. Availability confirmation blocked. |
 | No cached catalog | Empty state with instruction to open the main application and sync. |
-| AI generation in progress | Loading indicator in keyboard. Insert button disabled. |
-| AI generation error | Error message. Previous response (if any) remains. Retry available. |
+| AI generation in progress | Loading indicator. Insert button disabled. |
+| AI generation error | Error message. Retry available. |
 | Offline | AI generate button disabled. Deterministic templates still work. |
 
 ---
 
-## 7. Acceptance Criteria
+## 8. Acceptance Criteria
 
-### Main Application
+### Main Application (Milestone 1.1 additions)
 
-- [ ] An administrator can create a property with all required fields and have it appear in the App Group cache.
-- [ ] Changing a property's status in the app updates the cached value within 5 seconds.
-- [ ] A property with missing required fields cannot be pushed to the cache.
-- [ ] Selecting an active property in the app updates the shared active property ID.
-- [ ] Properties with status `inactive`, `rented`, or `sold` appear with a clear status label.
+- [ ] A new property is pre-filled with the next `SUN-###` code.
+- [ ] Saving a property with a duplicate code shows an error.
+- [ ] A MapKit map picker allows pin placement to set coordinates.
+- [ ] Address search via `MKLocalSearch` populates coordinates and formatted address.
+- [ ] Pasting a Google Maps URL extracts and stores coordinates.
+- [ ] `isExactLocationShareable` defaults to `false`; user must opt in.
+- [ ] `formattedAddress` and `fullAddress` never appear in the keyboard cache.
+- [ ] Listing import workflow creates a reviewable draft with confidence indicators.
+- [ ] No data is saved from import until the user confirms.
+- [ ] Existing Milestone 1 properties load without errors after the update.
+- [ ] No Photos Library permission is requested anywhere.
 
-### Keyboard
+### Keyboard (no changes in Milestone 1.1)
 
-- [ ] The keyboard opens and shows the active property bar on every launch.
-- [ ] The user can change the active property without closing the keyboard.
-- [ ] Selecting a new property updates the active property bar immediately.
-- [ ] Tapping a quick action inserts correctly formatted text into the host app's text field.
-- [ ] The user can import a customer message via explicit clipboard paste.
-- [ ] The keyboard does not read the clipboard without user action.
-- [ ] AI generation is disabled when offline.
-- [ ] A stale-cache warning appears when cached data is more than 24 hours old.
-- [ ] No message is sent without the agent tapping Send in the host application.
-- [ ] The keyboard handles inactive/rented/sold properties without generating availability confirmations.
+- [ ] All Milestone 1 catalog acceptance criteria remain passing.
+- [ ] The keyboard UI is unchanged.
