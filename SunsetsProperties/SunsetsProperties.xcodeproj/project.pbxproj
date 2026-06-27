@@ -6,7 +6,18 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		A23C8B342FEFCFC100FFEA86 /* SunsetsAIKeyboard.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = A23C8B2D2FEFCFC100FFEA86 /* SunsetsAIKeyboard.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
+		A23C8B322FEFCFC100FFEA86 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = A2A8A6B52FEFB7CD00469A9B /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = A23C8B2C2FEFCFC100FFEA86;
+			remoteInfo = SunsetsAIKeyboard;
+		};
 		A2A8A6CB2FEFB7CE00469A9B /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = A2A8A6B52FEFB7CD00469A9B /* Project object */;
@@ -23,13 +34,46 @@
 		};
 /* End PBXContainerItemProxy section */
 
+/* Begin PBXCopyFilesBuildPhase section */
+		A23C8B352FEFCFC100FFEA86 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				A23C8B342FEFCFC100FFEA86 /* SunsetsAIKeyboard.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
 /* Begin PBXFileReference section */
+		A23C8B2D2FEFCFC100FFEA86 /* SunsetsAIKeyboard.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = SunsetsAIKeyboard.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		A2A8A6BD2FEFB7CD00469A9B /* SunsetsProperties.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = SunsetsProperties.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A2A8A6CA2FEFB7CE00469A9B /* SunsetsPropertiesTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = SunsetsPropertiesTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		A2A8A6D42FEFB7CE00469A9B /* SunsetsPropertiesUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = SunsetsPropertiesUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		A23C8B382FEFCFC100FFEA86 /* Exceptions for "SunsetsAIKeyboard" folder in "SunsetsAIKeyboard" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = A23C8B2C2FEFCFC100FFEA86 /* SunsetsAIKeyboard */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
+		A23C8B2E2FEFCFC100FFEA86 /* SunsetsAIKeyboard */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				A23C8B382FEFCFC100FFEA86 /* Exceptions for "SunsetsAIKeyboard" folder in "SunsetsAIKeyboard" target */,
+			);
+			path = SunsetsAIKeyboard;
+			sourceTree = "<group>";
+		};
 		A2A8A6BF2FEFB7CD00469A9B /* SunsetsProperties */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = SunsetsProperties;
@@ -48,6 +92,13 @@
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
+		A23C8B2A2FEFCFC100FFEA86 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		A2A8A6BA2FEFB7CD00469A9B /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -78,6 +129,7 @@
 				A2A8A6BF2FEFB7CD00469A9B /* SunsetsProperties */,
 				A2A8A6CD2FEFB7CE00469A9B /* SunsetsPropertiesTests */,
 				A2A8A6D72FEFB7CE00469A9B /* SunsetsPropertiesUITests */,
+				A23C8B2E2FEFCFC100FFEA86 /* SunsetsAIKeyboard */,
 				A2A8A6BE2FEFB7CD00469A9B /* Products */,
 			);
 			sourceTree = "<group>";
@@ -88,6 +140,7 @@
 				A2A8A6BD2FEFB7CD00469A9B /* SunsetsProperties.app */,
 				A2A8A6CA2FEFB7CE00469A9B /* SunsetsPropertiesTests.xctest */,
 				A2A8A6D42FEFB7CE00469A9B /* SunsetsPropertiesUITests.xctest */,
+				A23C8B2D2FEFCFC100FFEA86 /* SunsetsAIKeyboard.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -95,6 +148,28 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		A23C8B2C2FEFCFC100FFEA86 /* SunsetsAIKeyboard */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A23C8B392FEFCFC100FFEA86 /* Build configuration list for PBXNativeTarget "SunsetsAIKeyboard" */;
+			buildPhases = (
+				A23C8B292FEFCFC100FFEA86 /* Sources */,
+				A23C8B2A2FEFCFC100FFEA86 /* Frameworks */,
+				A23C8B2B2FEFCFC100FFEA86 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				A23C8B2E2FEFCFC100FFEA86 /* SunsetsAIKeyboard */,
+			);
+			name = SunsetsAIKeyboard;
+			packageProductDependencies = (
+			);
+			productName = SunsetsAIKeyboard;
+			productReference = A23C8B2D2FEFCFC100FFEA86 /* SunsetsAIKeyboard.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 		A2A8A6BC2FEFB7CD00469A9B /* SunsetsProperties */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = A2A8A6DE2FEFB7CE00469A9B /* Build configuration list for PBXNativeTarget "SunsetsProperties" */;
@@ -102,10 +177,12 @@
 				A2A8A6B92FEFB7CD00469A9B /* Sources */,
 				A2A8A6BA2FEFB7CD00469A9B /* Frameworks */,
 				A2A8A6BB2FEFB7CD00469A9B /* Resources */,
+				A23C8B352FEFCFC100FFEA86 /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				A23C8B332FEFCFC100FFEA86 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				A2A8A6BF2FEFB7CD00469A9B /* SunsetsProperties */,
@@ -173,6 +250,9 @@
 				LastSwiftUpdateCheck = 2650;
 				LastUpgradeCheck = 2650;
 				TargetAttributes = {
+					A23C8B2C2FEFCFC100FFEA86 = {
+						CreatedOnToolsVersion = 26.5;
+					};
 					A2A8A6BC2FEFB7CD00469A9B = {
 						CreatedOnToolsVersion = 26.5;
 					};
@@ -203,11 +283,19 @@
 				A2A8A6BC2FEFB7CD00469A9B /* SunsetsProperties */,
 				A2A8A6C92FEFB7CE00469A9B /* SunsetsPropertiesTests */,
 				A2A8A6D32FEFB7CE00469A9B /* SunsetsPropertiesUITests */,
+				A23C8B2C2FEFCFC100FFEA86 /* SunsetsAIKeyboard */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
+		A23C8B2B2FEFCFC100FFEA86 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		A2A8A6BB2FEFB7CD00469A9B /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -232,6 +320,13 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		A23C8B292FEFCFC100FFEA86 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		A2A8A6B92FEFB7CD00469A9B /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -256,6 +351,11 @@
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
+		A23C8B332FEFCFC100FFEA86 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = A23C8B2C2FEFCFC100FFEA86 /* SunsetsAIKeyboard */;
+			targetProxy = A23C8B322FEFCFC100FFEA86 /* PBXContainerItemProxy */;
+		};
 		A2A8A6CC2FEFB7CE00469A9B /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			target = A2A8A6BC2FEFB7CD00469A9B /* SunsetsProperties */;
@@ -269,6 +369,74 @@
 /* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
+		A23C8B362FEFCFC100FFEA86 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = SunsetsAIKeyboard/SunsetsAIKeyboard.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 4NYQ7W23X2;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = SunsetsAIKeyboard/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = SunsetsAIKeyboard;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.sunsetsrealestate.sunsetsproperties.keyboard;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		A23C8B372FEFCFC100FFEA86 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = SunsetsAIKeyboard/SunsetsAIKeyboard.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 4NYQ7W23X2;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = SunsetsAIKeyboard/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = SunsetsAIKeyboard;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.sunsetsrealestate.sunsetsproperties.keyboard;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Release;
+		};
 		A2A8A6DC2FEFB7CE00469A9B /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -395,6 +563,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = SunsetsProperties/SunsetsProperties.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 4NYQ7W23X2;
@@ -434,6 +603,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = SunsetsProperties/SunsetsProperties.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 4NYQ7W23X2;
@@ -555,6 +725,15 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		A23C8B392FEFCFC100FFEA86 /* Build configuration list for PBXNativeTarget "SunsetsAIKeyboard" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A23C8B362FEFCFC100FFEA86 /* Debug */,
+				A23C8B372FEFCFC100FFEA86 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 		A2A8A6B82FEFB7CD00469A9B /* Build configuration list for PBXProject "SunsetsProperties" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
