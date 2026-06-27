@@ -209,5 +209,6 @@ SunsetsPropertiesTests/
 
 - Unit and integration tests should run in CI on every pull request.
 - Physical-device tests are gated to milestone completion; they are not part of per-PR CI.
-- XCTest is the test framework for all iOS tests.
-- No third-party test frameworks are approved yet.
+- **Unit tests** use Swift Testing (`import Testing`), available since Xcode 15 / Swift 5.9. This is the approved framework for all unit and integration tests.
+- **UI tests** use XCTest (`import XCTest`), which is required for `XCUIApplication`-based tests.
+- No third-party test frameworks are approved.

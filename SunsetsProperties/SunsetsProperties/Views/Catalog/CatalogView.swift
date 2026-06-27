@@ -1,0 +1,158 @@
+import SwiftUI
+
+struct CatalogView: View {
+    @State private var viewModel: CatalogViewModel
+    @State private var showingEditor: Bool = false
+    @State private var editingProperty: Property?
+    @State private var propertyToDelete: Property?
+    @State private var showDeleteConfirmation: Bool = false
+
+    init(viewModel: CatalogViewModel) {
+        _viewModel = State(initialValue: viewModel)
+    }
+
+    var body: some View {
+        NavigationStack {
+            Group {
+                if viewModel.isLoading {
+                    ProgressView("Cargando…")
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else if viewModel.filteredProperties.isEmpty {
+                    emptyState
+                } else {
+                    propertyList
+                }
+            }
+            .navigationTitle("Propiedades")
+            .searchable(text: $viewModel.searchText, prompt: "Buscar por título, código o ubicación")
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    filterMenu
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        editingProperty = nil
+                        showingEditor = true
+                    } label: {
+                        Image(systemName: "plus")
+                    }
+                    .accessibilityLabel("Agregar propiedad")
+                }
+            }
+            .sheet(isPresented: $showingEditor) {
+                PropertyEditorView(
+                    property: editingProperty,
+                    onSave: { property in
+                        Task { await viewModel.save(property) }
+                    }
+                )
+            }
+            .confirmationDialog(
+                "¿Eliminar esta propiedad?",
+                isPresented: $showDeleteConfirmation,
+                titleVisibility: .visible
+            ) {
+                Button("Eliminar", role: .destructive) {
+                    if let p = propertyToDelete {
+                        Task { await viewModel.delete(p) }
+                    }
+                }
+                Button("Cancelar", role: .cancel) {}
+            } message: {
+                Text("Esta acción no se puede deshacer.")
+            }
+            .alert("Error", isPresented: .constant(viewModel.errorMessage != nil)) {
+                Button("Aceptar") { viewModel.errorMessage = nil }
+            } message: {
+                Text(viewModel.errorMessage ?? "")
+            }
+        }
+        .task { await viewModel.load() }
+    }
+
+    private var propertyList: some View {
+        List {
+            ForEach(viewModel.filteredProperties) { property in
+                NavigationLink {
+                    PropertyDetailView(
+                        property: property,
+                        onEdit: { p in
+                            editingProperty = p
+                            showingEditor = true
+                        },
+                        onFavoriteToggle: { p in
+                            Task { await viewModel.toggleFavorite(p) }
+                        }
+                    )
+                } label: {
+                    PropertyRowView(property: property)
+                }
+                .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                    Button(role: .destructive) {
+                        propertyToDelete = property
+                        showDeleteConfirmation = true
+                    } label: {
+                        Label("Eliminar", systemImage: "trash")
+                    }
+                    Button {
+                        editingProperty = property
+                        showingEditor = true
+                    } label: {
+                        Label("Editar", systemImage: "pencil")
+                    }
+                    .tint(.blue)
+                }
+                .swipeActions(edge: .leading, allowsFullSwipe: true) {
+                    Button {
+                        Task { await viewModel.toggleFavorite(property) }
+                    } label: {
+                        Label(
+                            property.isFavorite ? "Quitar favorita" : "Favorita",
+                            systemImage: property.isFavorite ? "star.slash" : "star"
+                        )
+                    }
+                    .tint(.yellow)
+                }
+            }
+        }
+        .listStyle(.insetGrouped)
+        .refreshable { await viewModel.load() }
+    }
+
+    private var emptyState: some View {
+        Group {
+            if viewModel.properties.isEmpty {
+                EmptyStateView(
+                    icon: "building.2",
+                    title: "Sin propiedades",
+                    message: "Toca el botón + para agregar la primera propiedad al catálogo."
+                )
+            } else {
+                EmptyStateView(
+                    icon: "magnifyingglass",
+                    title: "Sin resultados",
+                    message: "No se encontraron propiedades con los filtros actuales."
+                )
+            }
+        }
+    }
+
+    private var filterMenu: some View {
+        Menu {
+            ForEach(CatalogFilter.allCases) { filter in
+                Button {
+                    viewModel.selectedFilter = filter
+                } label: {
+                    if viewModel.selectedFilter == filter {
+                        Label(filter.label, systemImage: "checkmark")
+                    } else {
+                        Text(filter.label)
+                    }
+                }
+            }
+        } label: {
+            Label(viewModel.selectedFilter.label, systemImage: "line.3.horizontal.decrease.circle")
+        }
+        .accessibilityLabel("Filtrar propiedades")
+    }
+}

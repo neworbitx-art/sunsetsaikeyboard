@@ -69,7 +69,7 @@ None — no code exists.
 
 ## Milestone 1 — Local Sunsets Properties Application
 
-**Status:** Not started
+**Status:** Approved and complete (2026-06-27)
 
 ### Objective
 Build the main SwiftUI application with a fully functional local property catalog using mocked data and in-memory storage. No networking, no backend, no Supabase.

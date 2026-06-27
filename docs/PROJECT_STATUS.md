@@ -1,15 +1,15 @@
 # Project Status — Sunsets AI
 
 **Last updated:** 2026-06-27
-**Current milestone:** Milestone 1 — Local Sunsets Properties Application
+**Current milestone:** Milestone 2 — Local SunsetsAIKeyboard Extension
 
 ---
 
 ## Current Phase
 
-Milestone 0 is **approved and complete**. All documentation has been created, reviewed, and approved by Nox. All pending decisions have been resolved (see ADR-008 in `docs/DECISIONS.md`).
+Milestone 1 is **approved and complete**. The local Sunsets Properties SwiftUI application was manually validated by Nox on 2026-06-27. All acceptance criteria confirmed on iPhone Simulator.
 
-Milestone 1 is ready to begin. No unresolved blockers remain for the Xcode project creation.
+Milestone 2 is ready to begin after the SunsetsAIKeyboard extension target is created and validated.
 
 ---
 
@@ -31,33 +31,50 @@ Milestone 1 is ready to begin. No unresolved blockers remain for the Xcode proje
 - [x] `docs/PROJECT_STATUS.md` — This file
 - [x] All Milestone 0 decisions resolved (ADR-008): deployment target, bundle IDs, App Group, locale, keyboard-cache exclusions, privacy policy timeline
 
+### Milestone 1 — Local Sunsets Properties Application ✅ Approved 2026-06-27
+
+- [x] Xcode project with `SunsetsProperties` target (SwiftUI, iOS 17+, iPhone only)
+- [x] `Property`, `KeyboardProperty`-compatible domain models (`Codable`, `Identifiable`, `Equatable`)
+- [x] Supporting types: `PropertyStatus`, `OperationType`, `PetPolicy`, `QuickReplyTemplate`, `TemplateCategory`
+- [x] `PropertyRepository` protocol for dependency injection
+- [x] `LocalPropertyRepository` — JSON file in Application Support, `UserDefaults` for active ID and employee
+- [x] `MockPropertyRepository` equivalent via seed data (`SeedData.swift`) with 6 sample properties
+- [x] SwiftUI catalog view with search (title, code, location) and filter (9 filter options)
+- [x] Property detail view (all non-sensitive fields)
+- [x] Property creation and editing form with validation
+- [x] Status change from editor form
+- [x] Active property selection with warning for non-available properties
+- [x] Active property cleared on delete; persists across app launches
+- [x] Keyboard setup guide screen (static, non-functional settings links)
+- [x] Mocked employee selector (Cristian / Yessy), persisted locally
+- [x] `CatalogViewModel`, `ActivePropertyViewModel`, `PropertyEditorViewModel`
+- [x] Reusable `StatusBadge`, `OperationBadge`, `EmptyStateView` components
+- [x] `AppFormatters` — currency (GTQ/USD), area (m²), dates (es-GT), bathrooms
+- [x] Spanish-first UI throughout
+- [x] Unit tests: 46 tests across 7 suites — all pass
+- [x] UI tests: launch and launch-performance — pass
+- [x] Build: `** BUILD SUCCEEDED **` for iPhone 17 Pro Simulator
+
 ---
 
 ## Pending Work
 
-### Milestone 1 — Local Sunsets Properties Application
+### Milestone 2 — Local SunsetsAIKeyboard Extension
 
-All Milestone 1 work is pending. See `docs/MILESTONES.md` for full scope. Summary:
+All Milestone 2 work is pending. See `docs/MILESTONES.md` for full scope.
 
-- Create Xcode project with two targets: `SunsetsProperties` and `SunsetsAIKeyboard` stub.
-- Configure App Group entitlement in both targets.
-- Implement `Property` and `KeyboardProperty` domain models.
-- Implement `MockPropertyRepository` with 5–10 sample properties.
-- Build SwiftUI catalog views (list, detail, create, edit, status change, active selection).
-- Implement `CatalogCacheService` to write keyboard-safe JSON to the App Group.
-- Build keyboard setup guide screen.
+**Waiting for:** SunsetsAIKeyboard extension target creation and validation before beginning feature implementation.
 
 ---
 
 ## Known Blockers
 
-1. **Apple Developer portal** — The following must be registered before the first Xcode build:
+1. **Apple Developer portal** — The following must be registered before the first Xcode build on a real device:
    - App Group: `group.com.sunsetsrealestate.sunsetsai`
    - Bundle ID (main app): `com.sunsetsrealestate.sunsetsproperties`
    - Bundle ID (keyboard): `com.sunsetsrealestate.sunsetsproperties.keyboard`
-   - These are proposed identifiers; they become confirmed when registered.
 
-No other blockers. All documentation decisions are resolved.
+2. **Test target deployment targets** — `SunsetsPropertiesTests` and `SunsetsPropertiesUITests` targets have `IPHONEOS_DEPLOYMENT_TARGET = 26.5` (inheriting from project level). Correction recommended: set to iOS 17.0 in Xcode to match the main target. Non-blocking for Simulator work on macOS 26.
 
 ---
 
@@ -74,6 +91,9 @@ No other blockers. All documentation decisions are resolved.
 | Organization model | Single organization (Sunsets Real Estate) |
 | `assignedAgentId` in keyboard cache | Excluded |
 | Privacy policy requirement | Deferred to Milestone 6 (not a Milestone 1 blocker) |
+| Local persistence (Milestone 1) | JSON file in Application Support + UserDefaults |
+| Test framework for unit tests | Swift Testing (`import Testing`) |
+| Test framework for UI tests | XCTest |
 
 ---
 
@@ -104,6 +124,4 @@ No other blockers. All documentation decisions are resolved.
 
 ## Next Exact Task
 
-> **Create the local Xcode project and begin Milestone 1 — Local Sunsets Properties application.**
-
-Before writing code, confirm the Apple Developer portal actions listed in the Known Blockers section above are complete or in progress.
+> **Create and validate the SunsetsAIKeyboard Custom Keyboard Extension target before implementing Milestone 2.**
