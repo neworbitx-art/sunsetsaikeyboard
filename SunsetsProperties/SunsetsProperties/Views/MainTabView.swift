@@ -13,7 +13,7 @@ struct MainTabView: View {
 
     var body: some View {
         TabView {
-            CatalogView(viewModel: catalogVM)
+            CatalogView(viewModel: catalogVM, repository: repository)
                 .tabItem {
                     Label("Propiedades", systemImage: "building.2")
                 }

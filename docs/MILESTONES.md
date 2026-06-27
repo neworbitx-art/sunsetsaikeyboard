@@ -1,6 +1,6 @@
 # Milestones — Sunsets AI Keyboard
 
-**Version:** 0.3 (Milestone 1.1 — Pending approval)
+**Version:** 0.4 (Milestone 2 — Not started)
 **Last updated:** 2026-06-27
 
 Each milestone has a defined scope, explicit exclusions, deliverables, acceptance criteria, testing requirements, known risks, and required human actions. No milestone may begin until the previous one has been explicitly approved.
@@ -25,7 +25,7 @@ Built the main SwiftUI application with a functional local property catalog usin
 
 ## Milestone 1.1 — Property Enrichment and Import
 
-**Status:** Pending approval
+**Status:** Approved and complete (2026-06-27). Manually validated by Nox on 2026-06-27.
 
 ### Objective
 Enrich the property model with structured location data, automatic internal codes, and a text-import workflow that creates a reviewable draft before any data is saved. All work remains offline and local.

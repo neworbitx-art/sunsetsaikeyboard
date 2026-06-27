@@ -1,8 +1,8 @@
 # Testing Strategy — Sunsets AI
 
-**Version:** 0.3 (Milestone 1.1 — Pending approval)
+**Version:** 0.4 (Milestone 2 — Not started)
 **Last updated:** 2026-06-27
-**Status:** Pending approval
+**Status:** Milestone 1.1 approved and complete
 
 ---
 
@@ -185,42 +185,42 @@ These tests verify the contract between the main application and the keyboard ex
 
 ---
 
-## 9. Manual Testing: Milestone 1.1 Acceptance
+## 9. Manual Testing: Milestone 1.1 Acceptance ✅ Validated 2026-06-27
 
-Before completing Milestone 1.1, the following manual tests must be performed:
+Manually validated by Nox on 2026-06-27 on iPhone 17 Simulator (iOS 26.5). All items confirmed.
 
 **Internal codes:**
-- [ ] Create a new property. Confirm it is pre-filled with the next `SUN-###` code.
-- [ ] Try to save a property with an existing code. Confirm the save is rejected with an error message.
-- [ ] Delete a property with code `SUN-003`. Create a new one. Confirm it gets `SUN-007` (or max+1), not `SUN-003`.
-- [ ] Override the proposed code manually. Confirm the next property gets max+1 from the new code.
+- [x] New property pre-filled with the next `SUN-###` code; code is read-only.
+- [x] Opening and cancelling the form does not consume a code; same code shown on re-open.
+- [x] Saving consumes exactly one code; next open shows the incremented code.
+- [x] Deleting a property does not make its code available for reuse.
+- [x] Editing an existing property preserves its code unchanged.
 
 **Location picker:**
-- [ ] Open the property editor for a new property. Tap "Seleccionar ubicación en mapa". Confirm a MapKit map appears.
-- [ ] Drag the pin to a location. Tap confirm. Confirm the property now shows `latitude` and `longitude` populated.
-- [ ] Search for an address ("Zona 10, Guatemala"). Select a result. Confirm `formattedAddress` and coordinates populate.
-- [ ] Paste a Google Maps URL into the URL field. Confirm coordinates and `googleMapsURL` are stored.
-- [ ] Enable `isExactLocationShareable`. Save the property. Inspect the catalog (via debug) to confirm coordinates appear in the keyboard cache.
-- [ ] Disable `isExactLocationShareable`. Save. Confirm coordinates are absent from the keyboard cache.
-- [ ] Confirm `fullAddress` is never visible in the keyboard cache or the `KeyboardProperty` model.
+- [x] MapKit map picker opens; draggable pin sets `latitude` and `longitude`.
+- [x] `MKLocalSearch` address search returns results; selecting a result populates coordinates.
+- [x] Pasting a Google Maps URL auto-populates coordinates in the editor.
+- [x] `isExactLocationShareable` toggle works as a privacy gate.
+- [x] Structured location fields saved and displayed correctly.
 
 **Listing import:**
-- [ ] Tap "Importar descripción" in the catalog. Paste a sample property description in Spanish.
-- [ ] Confirm a draft review screen appears with detected fields and confidence levels.
-- [ ] Confirm fields with `low` or `missing` confidence are visually highlighted.
-- [ ] Confirm contact info (if any) is visible in the draft but marked as "reference only".
-- [ ] Tap "Descartar". Confirm no property was added to the catalog.
-- [ ] Repeat the import. Correct all highlighted fields. Tap "Confirmar y crear propiedad". Confirm the property appears in the catalog.
-- [ ] Confirm the saved property does not contain the original listing text or any contact info.
+- [x] CENTO listing imports correctly: rent, Q 4,200, mantenimiento incluido, Q 4,200 deposit, Santa Catarina Pinula, Level 2, 3 bedrooms, 1 bath, 2 parking, estufa+lavasecadora included, refrigeradora excluded.
+- [x] Tanta Premier listing imports correctly: sale, Q 1,450,000, Zona 10 Santa Catarina Pinula, 140 m², 3 bedrooms, 3 parking, no invented bathroom count, included items, amenities.
+- [x] Missing numeric fields remain empty in review (no silent default zero).
+- [x] Draft review shows colour-coded confidence indicators.
+- [x] Data not saved until user taps "Confirmar".
+- [x] "Descartar" discards draft without saving.
 
 **Migration:**
-- [ ] Build and run the Milestone 1.1 version on top of an existing Milestone 1 database. Confirm all 6 seed properties load without error.
-- [ ] Confirm each existing property has `locationSource = .manual` (or nil resolved to manual), `isExactLocationShareable = false`, `includedItems = []`, `excludedItems = []`.
+- [x] Existing Milestone 1 properties load without error.
+- [x] Existing properties default to `locationSource = .manual`, `isExactLocationShareable = false`, `includedItems = []`, `excludedItems = []`.
 
-**Exclusions:**
-- [ ] Confirm no `PhotosPicker` or camera button is visible anywhere in the app.
-- [ ] Confirm no "Photos" or "Camera" permission dialog appears.
-- [ ] Confirm no network requests are made during `LocalListingParser` import (verify with Charles Proxy or offline mode).
+**Exclusions verified:**
+- [x] No `PhotosPicker`, no camera permission, no Photos framework.
+- [x] No network requests during `LocalListingParser` import.
+- [x] No keyboard extension UI changes.
+- [x] No App Group capability changes.
+- [x] No AI or backend calls.
 
 ---
 

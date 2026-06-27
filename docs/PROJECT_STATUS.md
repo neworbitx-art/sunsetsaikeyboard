@@ -1,7 +1,7 @@
 # Project Status — Sunsets AI
 
 **Last updated:** 2026-06-27
-**Current milestone:** Milestone 1.1 — Property Enrichment and Import (Pending approval)
+**Current milestone:** Milestone 2 — Local SunsetsAIKeyboard Extension (not started)
 
 ---
 
@@ -9,7 +9,7 @@
 
 Milestone 1 is **approved and complete** (2026-06-27). The local Sunsets Properties SwiftUI application was manually validated by Nox on 2026-06-27. All acceptance criteria confirmed on iPhone Simulator.
 
-Milestone 1.1 documentation has been written and is **pending Nox's review and approval** before implementation begins. No application code has been written for Milestone 1.1.
+Milestone 1.1 is **approved and complete** (2026-06-27). Manually validated by Nox on 2026-06-27. All acceptance criteria confirmed on iPhone 17 Simulator. Milestone 2 may now begin.
 
 ---
 
@@ -55,58 +55,59 @@ Milestone 1.1 documentation has been written and is **pending Nox's review and a
 - [x] UI tests: launch and launch-performance — pass
 - [x] Build: `** BUILD SUCCEEDED **` for iPhone 17 Pro Simulator
 
-### Milestone 1.1 — Property Enrichment and Import 📋 Documentation Pending Approval
+### Milestone 1.1 — Property Enrichment and Import ✅ Approved 2026-06-27
 
-- [x] `docs/PRODUCT_SPEC.md` updated — structured location, auto codes, listing import, media deferred
-- [x] `docs/ARCHITECTURE.md` updated — MapKit, new services, updated data flows, updated layer structure
-- [x] `docs/PROPERTY_SCHEMA.md` updated — new location fields, `LocationSource`, `PropertyDraft`, `DraftField<T>`, `DraftConfidence`, migration table, SUN-### code format
-- [x] `docs/DECISIONS.md` updated — ADR-009 through ADR-013
-- [x] `docs/MILESTONES.md` updated — Milestone 1.1 inserted with full scope, acceptance criteria, risks, required human actions
-- [x] `docs/SECURITY_AND_PRIVACY.md` updated — location privacy, listing import data minimization
-- [x] `docs/TESTING.md` updated — Milestone 1.1 unit and manual test requirements
-- [x] `docs/API_CONTRACTS.md` updated — `POST /import/listing` contract (implementation deferred to Milestone 4)
-- [x] `docs/PROJECT_STATUS.md` updated — current status reflects documentation phase
+**Documentation (from prior session):**
+- [x] `docs/PRODUCT_SPEC.md` v0.3
+- [x] `docs/ARCHITECTURE.md` v0.3
+- [x] `docs/PROPERTY_SCHEMA.md` v0.3
+- [x] `docs/DECISIONS.md` — ADR-009 through ADR-013
+- [x] `docs/MILESTONES.md` v0.3
+- [x] `docs/SECURITY_AND_PRIVACY.md` v0.3
+- [x] `docs/TESTING.md` v0.3
+- [x] `docs/API_CONTRACTS.md` v0.3
+
+**Implementation:**
+- [x] `Models/LocationSource.swift` — NEW
+- [x] `Models/PropertyDraft.swift` — NEW (`DraftField<T>`, `DraftConfidence`, `PropertyDraft`)
+- [x] `Models/Property.swift` — 12 new fields; custom decoder in extension preserves memberwise init
+- [x] `Repositories/PropertyRepository.swift` — `nextInternalCode()`, `isInternalCodeUnique()` added
+- [x] `Repositories/LocalPropertyRepository.swift` — migration, backup, `lastIssuedInternalCodeNumber` counter
+- [x] `Services/InternalCodeService.swift` — NEW (`SUN-###` format/extract utilities)
+- [x] `Services/GoogleMapsURLParser.swift` — NEW (parses `?q=` and `/@` formats; no network; no API key)
+- [x] `Services/ListingImportService.swift` — NEW (protocol + `LocalListingParser` + `ClaudeListingParser` stub)
+- [x] `ViewModels/PropertyEditorViewModel.swift` — optional repository dep; `prepareForNew()` async; new location/feature fields; `load(from: PropertyDraft)`
+- [x] `ViewModels/ListingImportViewModel.swift` — NEW
+- [x] `Views/PropertyEditor/LocationPickerView.swift` — NEW (MapKit pin, MKLocalSearch, CLGeocoder)
+- [x] `Views/ListingImport/ListingImportView.swift` — NEW
+- [x] `Views/ListingImport/DraftReviewView.swift` — NEW (confidence colour indicators, all fields editable)
+- [x] `Views/PropertyEditor/PropertyEditorView.swift` — read-only code display, map picker, new fields
+- [x] `Views/PropertyDetail/PropertyDetailView.swift` — new location fields, Google Maps link, excluded items
+- [x] `Views/Catalog/CatalogView.swift` — repository param, import button
+- [x] `Views/MainTabView.swift` — passes repository to CatalogView
+- [x] `SunsetsPropertiesApp.swift` — `migrateIfNeeded()` called before seed
+- [x] 91 unit tests — all pass (46 original + 45 new across 6 new suites)
+- [x] Build: `** BUILD SUCCEEDED **` (iPhone 17 Simulator, iOS 26.5)
+- [x] Tests: `** TEST SUCCEEDED **`
 
 ---
 
 ## Pending Work
 
-### Milestone 1.1 — Property Enrichment and Import (Implementation Blocked on Approval)
+### Milestone 2 — Local SunsetsAIKeyboard Extension (Not started)
 
-All Milestone 1.1 implementation is pending. See `docs/MILESTONES.md` for full scope.
-
-**Waiting for:** Nox's review and approval of Milestone 1.1 documentation before implementation begins.
-
-Key implementation tasks (not to start until approved):
-- [ ] Add new fields to `Property` model: `publicLocationLabel`, `formattedAddress`, `googleMapsURL`, `locationSource`, `isExactLocationShareable`, `includedItems`, `excludedItems`
-- [ ] Implement `LocationSource` enum (`Models/LocationSource.swift`)
-- [ ] Update `LocalPropertyRepository` decoder with migration defaults
-- [ ] Implement `InternalCodeGenerator` service
-- [ ] Update `PropertyEditorViewModel` to propose next code and validate uniqueness
-- [ ] Implement `LocationImportService` (Google Maps URL parser and `MKLocalSearch` wrapper)
-- [ ] Build `LocationPickerView` with MapKit map and address search
-- [ ] Implement `PropertyDraft`, `DraftField<T>`, `DraftConfidence` models
-- [ ] Implement `ListingImportService` protocol and `LocalListingParser`
-- [ ] Add `ClaudeListingParser` stub (protocol conformance, no implementation)
-- [ ] Build `ListingImportView` and `DraftReviewView`
-- [ ] Update `CatalogCacheService` to project new location fields with `isExactLocationShareable` gate
-- [ ] Update all new unit tests (see `docs/TESTING.md` Section 3)
-- [ ] Manual acceptance testing per `docs/TESTING.md` Section 9
+Awaiting implementation start after Milestone 1.1 approval. Scope defined in `docs/MILESTONES.md`.
 
 ---
 
 ## Known Blockers
 
-1. **Milestone 1.1 documentation approval** — Implementation must not begin until Nox has reviewed and explicitly approved the Milestone 1.1 documentation.
-
-2. **Apple Developer portal** — The following must be registered before the first Xcode build on a real device:
+1. **Apple Developer portal** — The following must be registered before the first Xcode build on a real device:
    - App Group: `group.com.sunsetsrealestate.sunsetsai`
    - Bundle ID (main app): `com.sunsetsrealestate.sunsetsproperties`
    - Bundle ID (keyboard): `com.sunsetsrealestate.sunsetsproperties.keyboard`
 
-3. **Test target deployment targets** — `SunsetsPropertiesTests` and `SunsetsPropertiesUITests` targets have `IPHONEOS_DEPLOYMENT_TARGET = 26.5` (inheriting from project level). Correction recommended: set to iOS 17.0 in Xcode to match the main target. Non-blocking for Simulator work on macOS 26.
-
-4. **`locationSource` migration risk** — `locationSource` is a non-optional enum in the schema. Existing Milestone 1 properties have no `locationSource` key in their JSON. The `LocalPropertyRepository` decoder must handle this via a custom `init(from:)` with a `.manual` default, or `locationSource` must be made optional (`LocationSource?`) in the Codable model. This must be resolved during implementation before any existing data is touched.
+2. **Test target deployment targets** — `SunsetsPropertiesTests` and `SunsetsPropertiesUITests` targets have `IPHONEOS_DEPLOYMENT_TARGET = 26.5` (inheriting from project level). Correction recommended: set to iOS 17.0 in Xcode to match the main target. Non-blocking for Simulator work on macOS 26.
 
 ---
 
@@ -202,4 +203,4 @@ Key implementation tasks (not to start until approved):
 
 ## Next Exact Task
 
-> **Review and approve Milestone 1.1 documentation before implementation.**
+> **Implement Milestone 2 — Local SunsetsAIKeyboard Extension and shared keyboard-safe property catalog.**

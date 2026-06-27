@@ -7,8 +7,10 @@ struct SunsetsPropertiesApp: App {
     init() {
         let repo = LocalPropertyRepository()
         self.repository = repo
-        // Seed on first launch; subsequent launches are a no-op
         Task {
+            // Migrate first (backs up JSON and adds new fields with defaults)
+            try? await repo.migrateIfNeeded()
+            // Seed on first launch; subsequent launches are a no-op
             try? await repo.seedIfNeeded(SeedData.properties)
         }
     }

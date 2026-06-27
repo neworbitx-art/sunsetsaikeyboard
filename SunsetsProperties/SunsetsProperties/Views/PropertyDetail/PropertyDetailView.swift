@@ -35,6 +35,8 @@ struct PropertyDetailView: View {
         }
     }
 
+    // MARK: - Sections
+
     private var headerSection: some View {
         Section {
             LabeledContent("Código", value: property.internalCode)
@@ -75,10 +77,25 @@ struct PropertyDetailView: View {
     private var locationSection: some View {
         Section("Ubicación") {
             LabeledContent("Resumen", value: property.locationSummary)
+            if let label = property.publicLocationLabel {
+                LabeledContent("Etiqueta pública", value: label)
+            }
             if let n = property.neighborhood { LabeledContent("Colonia / Zona", value: n) }
             if let c = property.city { LabeledContent("Ciudad", value: c) }
             if let s = property.state { LabeledContent("Departamento", value: s) }
             LabeledContent("País", value: property.country)
+
+            if let lat = property.latitude, let lon = property.longitude,
+               property.isExactLocationShareable {
+                LabeledContent("Coordenadas",
+                               value: String(format: "%.5f, %.5f", lat, lon))
+            }
+            if let mapsURL = property.googleMapsURL,
+               let url = URL(string: mapsURL) {
+                Link(destination: url) {
+                    Label("Abrir en Google Maps", systemImage: "map")
+                }
+            }
         }
     }
 
@@ -91,6 +108,9 @@ struct PropertyDetailView: View {
             }
             LabeledContent("Estacionamientos", value: "\(property.parkingSpaces)")
             LabeledContent("Área", value: AppFormatters.area(property.areaSquareMeters))
+            if let floor = property.floorNumber {
+                LabeledContent("Nivel", value: "\(floor)")
+            }
         }
     }
 
@@ -107,6 +127,21 @@ struct PropertyDetailView: View {
                 Section("Electrodomésticos incluidos") {
                     ForEach(property.includedAppliances, id: \.self) { item in
                         Label(item, systemImage: "checkmark.circle")
+                    }
+                }
+            }
+            if !property.includedItems.isEmpty {
+                Section("Artículos incluidos") {
+                    ForEach(property.includedItems, id: \.self) { item in
+                        Label(item, systemImage: "checkmark.circle")
+                    }
+                }
+            }
+            if !property.excludedItems.isEmpty {
+                Section("No incluye") {
+                    ForEach(property.excludedItems, id: \.self) { item in
+                        Label(item, systemImage: "xmark.circle")
+                            .foregroundStyle(.secondary)
                     }
                 }
             }

@@ -6,9 +6,13 @@ struct CatalogView: View {
     @State private var editingProperty: Property?
     @State private var propertyToDelete: Property?
     @State private var showDeleteConfirmation: Bool = false
+    @State private var showingImport: Bool = false
 
-    init(viewModel: CatalogViewModel) {
+    private let repository: any PropertyRepository
+
+    init(viewModel: CatalogViewModel, repository: any PropertyRepository) {
         _viewModel = State(initialValue: viewModel)
+        self.repository = repository
     }
 
     var body: some View {
@@ -29,7 +33,14 @@ struct CatalogView: View {
                 ToolbarItem(placement: .topBarLeading) {
                     filterMenu
                 }
-                ToolbarItem(placement: .topBarTrailing) {
+                ToolbarItemGroup(placement: .topBarTrailing) {
+                    Button {
+                        showingImport = true
+                    } label: {
+                        Image(systemName: "square.and.arrow.down")
+                    }
+                    .accessibilityLabel("Importar anuncio")
+
                     Button {
                         editingProperty = nil
                         showingEditor = true
@@ -42,10 +53,16 @@ struct CatalogView: View {
             .sheet(isPresented: $showingEditor) {
                 PropertyEditorView(
                     property: editingProperty,
+                    repository: repository,
                     onSave: { property in
                         Task { await viewModel.save(property) }
                     }
                 )
+            }
+            .sheet(isPresented: $showingImport) {
+                ListingImportView(repository: repository) { property in
+                    Task { await viewModel.save(property) }
+                }
             }
             .confirmationDialog(
                 "¿Eliminar esta propiedad?",
@@ -69,6 +86,8 @@ struct CatalogView: View {
         }
         .task { await viewModel.load() }
     }
+
+    // MARK: - Subviews
 
     private var propertyList: some View {
         List {
