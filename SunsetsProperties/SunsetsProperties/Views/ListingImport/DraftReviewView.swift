@@ -28,6 +28,9 @@ struct DraftReviewView: View {
                 locationSection
                 spaceSection
                 featuresSection
+                if vm.operationType == .sale || vm.operationType == .rentOrSale {
+                    financingSection
+                }
                 visitSection
 
                 if !vm.validationErrors.isEmpty {
@@ -248,6 +251,23 @@ struct DraftReviewView: View {
                         TextEditor(text: $vm.excludedItemsText).frame(minHeight: 60)
                     }
                 }
+            }
+        }
+    }
+
+    private var financingSection: some View {
+        Section("Financiamiento") {
+            draftRow(label: "Financ. vendedor", field: draft.sellerFinancingStatus) {
+                Picker("Financ. vendedor", selection: $vm.sellerFinancingStatus) {
+                    ForEach(SellerFinancingStatus.allCases) { s in Text(s.label).tag(s) }
+                }
+                .pickerStyle(.menu)
+            }
+            draftRow(label: "Elegibilidad FHA", field: draft.fhaEligibility) {
+                Picker("Elegibilidad FHA", selection: $vm.fhaEligibility) {
+                    ForEach(FHAEligibility.allCases) { e in Text(e.label).tag(e) }
+                }
+                .pickerStyle(.menu)
             }
         }
     }

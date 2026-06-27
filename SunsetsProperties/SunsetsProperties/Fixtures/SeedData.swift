@@ -91,7 +91,7 @@ enum SeedData {
             amenities: ["Área de lavandería", "Vigilancia"],
             includedAppliances: ["Estufa"],
             requirements: ["2 meses de depósito", "Carta de trabajo"],
-            petPolicy: .caseByCase,
+            petPolicy: .subjectToCaseAnalysis,
             visitInstructions: nil,
             quickReplyTemplates: [],
             isFavorite: false,
@@ -187,7 +187,7 @@ enum SeedData {
             amenities: ["Piscina", "Gimnasio", "Área de juegos", "Salón de eventos", "Seguridad 24h"],
             includedAppliances: ["Refrigeradora", "Estufa", "Microondas", "Lavadora"],
             requirements: ["3 meses de depósito", "Comprobante de ingresos 4x renta", "Sin mascotas grandes"],
-            petPolicy: .allowedWithDeposit,
+            petPolicy: .subjectToCaseAnalysis,
             visitInstructions: "Llamar al 4444-7890. Disponible lunes a sábado de 10 a 18 h.",
             quickReplyTemplates: [
                 QuickReplyTemplate(

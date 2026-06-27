@@ -185,6 +185,32 @@ These tests verify the contract between the main application and the keyboard ex
 
 ---
 
+## 8.1 Milestone 1.1 Refinement Unit Tests (pet policy + financing)
+
+### Pet Policy
+- Verify that `PetPolicy.allCases.count == 3`.
+- Verify raw values: `"allowed"`, `"notAllowed"`, `"subjectToCaseAnalysis"`.
+- Verify Spanish labels: "Se acepta mascota", "No se aceptan mascotas", "Sujeto a análisis de caso".
+- Verify that decoding `"allowedWithDeposit"` produces `.subjectToCaseAnalysis`.
+- Verify that decoding `"caseByCase"` produces `.subjectToCaseAnalysis`.
+
+### Sale Financing
+- Verify that `Property.new().fhaEligibility == .unknown` and `sellerFinancingStatus == .unknown`.
+- Verify that `FinancingTextService.text(for:)` returns `nil` for a rental property.
+- Verify that `FinancingTextService.text(for:)` returns non-nil text for a sale property with `sellerFinancingStatus == .unavailable`.
+- Verify that the FHA paragraph appears in the text when `fhaEligibility == .eligible`.
+- Verify that the FHA paragraph is absent when `fhaEligibility == .notEligible`.
+- Verify that `FinancingTextService.fhaWarning(for:)` returns a non-nil warning when `fhaEligibility == .unknown` and `sellerFinancingStatus == .unavailable`.
+- Verify that financing fields round-trip through JSON encoding/decoding without data loss.
+- Verify that a `Property` JSON without financing fields decodes with `.unknown` defaults.
+
+### FHA Parser
+- Verify that "Aplica FHA" in listing text → `fhaEligibility.value == .eligible`.
+- Verify that "No aplica FHA" in listing text → `fhaEligibility.value == .notEligible`.
+- Verify that no FHA mention → `fhaEligibility.value == .unknown`.
+
+---
+
 ## 9. Manual Testing: Milestone 1.1 Acceptance ✅ Validated 2026-06-27
 
 Manually validated by Nox on 2026-06-27 on iPhone 17 Simulator (iOS 26.5). All items confirmed.
@@ -221,6 +247,31 @@ Manually validated by Nox on 2026-06-27 on iPhone 17 Simulator (iOS 26.5). All i
 - [x] No keyboard extension UI changes.
 - [x] No App Group capability changes.
 - [x] No AI or backend calls.
+
+---
+
+## 9.1 Manual Testing: Milestone 1.1 Refinement (pet policy + financing) ✅ Validated 2026-06-27
+
+Manually validated by Nox on 2026-06-27.
+
+**Pet policy:**
+- [x] Pet policy picker shows exactly 3 options: "Se acepta mascota", "No se aceptan mascotas", "Sujeto a análisis de caso".
+- [x] Removed option "Se aceptan mascotas con depósito" no longer appears.
+- [x] Existing properties with legacy `caseByCase` or `allowedWithDeposit` load with "Sujeto a análisis de caso".
+
+**Sale financing:**
+- [x] Financing section appears in the editor form for sale and rent-or-sale properties.
+- [x] Financing section is NOT visible when operation type is "Renta".
+- [x] Detail view shows financing section for sale properties only.
+- [x] FHA eligibility defaults to unknown and is mentioned only when explicitly confirmed.
+- [x] All financing fields save and reload correctly across app restarts.
+- [x] Existing properties (no financing fields in JSON) load without error; financing fields default to `.unknown` / `false`.
+
+**Listing import:**
+- [x] Parser detects explicit FHA information without inventing unsupported values.
+
+**Exclusions verified:**
+- [x] No keyboard-interface, AI, backend, Supabase, networking, or media changes.
 
 ---
 

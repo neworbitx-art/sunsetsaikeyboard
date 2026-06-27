@@ -3,17 +3,15 @@ import Foundation
 enum PetPolicy: String, Codable, CaseIterable, Identifiable {
     case allowed
     case notAllowed
-    case allowedWithDeposit
-    case caseByCase
+    case subjectToCaseAnalysis
 
     var id: String { rawValue }
 
     var label: String {
         switch self {
-        case .allowed:            return "Se aceptan mascotas"
-        case .notAllowed:         return "No se aceptan mascotas"
-        case .allowedWithDeposit: return "Se aceptan mascotas con depósito"
-        case .caseByCase:         return "Caso por caso"
+        case .allowed:               return "Se acepta mascota"
+        case .notAllowed:            return "No se aceptan mascotas"
+        case .subjectToCaseAnalysis: return "Sujeto a análisis de caso"
         }
     }
 }

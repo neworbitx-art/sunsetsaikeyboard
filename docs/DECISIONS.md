@@ -6,6 +6,37 @@ Decisions are recorded here in reverse-chronological order (newest first). Each 
 
 ---
 
+## ADR-014 — Sale financing model and FHA eligibility (Milestone 1.1 refinement)
+
+**Date:** 2026-06-27
+**Status:** Accepted
+
+### Context
+Real estate agents in Guatemala must communicate financing options to buyers. The primary path is bank financing (typically 70–80% of purchase price). FHA is an explicitly government-certified program that not all properties qualify for. Agents need to accurately represent whether a property "Aplica FHA" or not — guessing is a liability.
+
+### Decision
+Three new fields are added to `Property` for sale properties only: `sellerFinancingStatus` (`.unavailable` / `.available` / `.unknown`), `fhaEligibility` (`.eligible` / `.notEligible` / `.unknown`), and `financingNotes`.
+
+`FinancingTextService` generates deterministic Spanish text: when `sellerFinancingStatus == .unavailable`, the bank financing paragraph is shown; FHA paragraph is appended only when `fhaEligibility == .eligible`; when `.unknown`, an internal warning is displayed rather than generated text.
+
+`LocalListingParser` detects "Aplica FHA" / "No aplica FHA" explicitly; it never infers FHA eligibility from any other text. When no FHA phrase is found, `fhaEligibility` is `.unknown`.
+
+The financing UI section (form and detail) is hidden for rental-only properties. Fields are present in the model for all properties but only surfaced when `operationType == .sale || .rentOrSale`.
+
+Simultaneously, `PetPolicy` is reduced from 4 to 3 cases: `allowedWithDeposit` and `caseByCase` are removed and their legacy JSON values are mapped to `subjectToCaseAnalysis` in the migration decoder.
+
+### Alternatives Considered
+- **Always show FHA fields regardless of operation type:** Clutters the rental workflow. Rejected.
+- **Infer FHA eligibility from price range or neighborhood:** Too risky — incorrect information could mislead buyers. FHA eligibility is a legal determination, not an inference. Rejected.
+- **Use `.notEligible` as default instead of `.unknown`:** Would silently misrepresent properties that haven't been evaluated. Rejected.
+
+### Consequences
+- Two new model types (`SellerFinancingStatus`, `FHAEligibility`) are added to the `Models` group.
+- `FinancingTextService` in `Services` is the canonical source of financing text.
+- Financing fields decode with safe defaults from old JSON (all `.unknown` / `false`).
+
+---
+
 ## ADR-013 — Property media deferred to a future milestone
 
 **Date:** 2026-06-27

@@ -59,8 +59,8 @@ struct PropertyModelTests {
     @Test func petPolicyRawValues() {
         #expect(PetPolicy.allowed.rawValue == "allowed")
         #expect(PetPolicy.notAllowed.rawValue == "notAllowed")
-        #expect(PetPolicy.allowedWithDeposit.rawValue == "allowedWithDeposit")
-        #expect(PetPolicy.caseByCase.rawValue == "caseByCase")
+        #expect(PetPolicy.subjectToCaseAnalysis.rawValue == "subjectToCaseAnalysis")
+        #expect(PetPolicy.allCases.count == 3)
     }
 
     @Test func newFieldsDecodeWithDefaultsFromLegacyJSON() throws {
@@ -1027,6 +1027,165 @@ struct TitleGenerationTests {
         #expect(draft.title.confidence != .high)
         #expect(draft.title.warning != nil)
     }
+}
+
+// MARK: - Pet Policy Refinement Tests
+
+@Suite("Pet Policy Refinement")
+struct PetPolicyRefinementTests {
+
+    @Test func spanishLabels() {
+        #expect(PetPolicy.allowed.label == "Se acepta mascota")
+        #expect(PetPolicy.notAllowed.label == "No se aceptan mascotas")
+        #expect(PetPolicy.subjectToCaseAnalysis.label == "Sujeto a análisis de caso")
+    }
+
+    @Test func legacyAllowedWithDepositMigratesCorrectly() throws {
+        let json = miniPropertyJSON(petPolicy: "allowedWithDeposit")
+        let decoder = JSONDecoder(); decoder.dateDecodingStrategy = .iso8601
+        let property = try decoder.decode(Property.self, from: json)
+        #expect(property.petPolicy == .subjectToCaseAnalysis)
+    }
+
+    @Test func legacyCaseByCaseMigratesCorrectly() throws {
+        let json = miniPropertyJSON(petPolicy: "caseByCase")
+        let decoder = JSONDecoder(); decoder.dateDecodingStrategy = .iso8601
+        let property = try decoder.decode(Property.self, from: json)
+        #expect(property.petPolicy == .subjectToCaseAnalysis)
+    }
+}
+
+// MARK: - Sale Financing Tests
+
+@Suite("Sale Financing")
+struct SaleFinancingTests {
+
+    @Test func fhaDefaultsToUnknown() {
+        let p = Property.new()
+        #expect(p.fhaEligibility == .unknown)
+        #expect(p.sellerFinancingStatus == .unknown)
+    }
+
+    @Test func financingTextNilForRentalProperty() {
+        var p = makeSampleProperty()
+        p.operationType = .rent
+        p.sellerFinancingStatus = .unavailable
+        p.fhaEligibility = .eligible
+        #expect(FinancingTextService.text(for: p) == nil)
+    }
+
+    @Test func financingTextNotNilForSaleWithUnavailableFinancing() {
+        var p = makeSampleProperty()
+        p.operationType = .sale
+        p.sellerFinancingStatus = .unavailable
+        let text = FinancingTextService.text(for: p)
+        #expect(text != nil)
+        #expect(text?.contains("banco") == true || text?.contains("banco") == false && text?.contains("70%") == true)
+    }
+
+    @Test func financingTextIncludesFHAParagraphWhenEligible() {
+        var p = makeSampleProperty()
+        p.operationType = .sale
+        p.sellerFinancingStatus = .unavailable
+        p.fhaEligibility = .eligible
+        let text = FinancingTextService.text(for: p) ?? ""
+        #expect(text.contains("FHA"))
+        #expect(text.contains("5%"))
+    }
+
+    @Test func financingTextOmitsFHAWhenNotEligible() {
+        var p = makeSampleProperty()
+        p.operationType = .sale
+        p.sellerFinancingStatus = .unavailable
+        p.fhaEligibility = .notEligible
+        let text = FinancingTextService.text(for: p) ?? ""
+        #expect(!text.contains("FHA"))
+    }
+
+    @Test func fhaWarningShownWhenUnknown() {
+        var p = makeSampleProperty()
+        p.operationType = .sale
+        p.sellerFinancingStatus = .unavailable
+        p.fhaEligibility = .unknown
+        let warning = FinancingTextService.fhaWarning(for: p)
+        #expect(warning != nil)
+        #expect(warning?.contains("FHA") == true)
+    }
+
+    @Test func fhaWarningNilWhenEligible() {
+        var p = makeSampleProperty()
+        p.operationType = .sale
+        p.sellerFinancingStatus = .unavailable
+        p.fhaEligibility = .eligible
+        #expect(FinancingTextService.fhaWarning(for: p) == nil)
+    }
+
+    @Test func financingFieldsRoundTripJSON() throws {
+        var p = makeSampleProperty()
+        p.operationType = .sale
+        p.sellerFinancingStatus = .unavailable
+        p.bankFinancingAssistanceAvailable = true
+        p.fhaEligibility = .eligible
+        p.financingNotes = "Banco Industrial disponible"
+        let encoder = JSONEncoder(); encoder.dateEncodingStrategy = .iso8601
+        let decoder = JSONDecoder(); decoder.dateDecodingStrategy = .iso8601
+        let data = try encoder.encode(p)
+        let decoded = try decoder.decode(Property.self, from: data)
+        #expect(decoded.sellerFinancingStatus == .unavailable)
+        #expect(decoded.bankFinancingAssistanceAvailable == true)
+        #expect(decoded.fhaEligibility == .eligible)
+        #expect(decoded.financingNotes == "Banco Industrial disponible")
+    }
+
+    @Test func legacyJSONDecodesWithFinancingDefaults() throws {
+        let json = miniPropertyJSON(petPolicy: "notAllowed")
+        let decoder = JSONDecoder(); decoder.dateDecodingStrategy = .iso8601
+        let property = try decoder.decode(Property.self, from: json)
+        #expect(property.sellerFinancingStatus == .unknown)
+        #expect(property.fhaEligibility == .unknown)
+        #expect(property.bankFinancingAssistanceAvailable == false)
+        #expect(property.financingNotes == nil)
+    }
+}
+
+// MARK: - FHA Parser Tests
+
+@Suite("LocalListingParser — FHA Detection")
+struct FHAParserTests {
+
+    let parser = LocalListingParser()
+
+    @Test func detectsAplicaFHAAsEligible() async throws {
+        let listing = "Casa en venta. Precio Q2,500,000. Aplica FHA. 3 recámaras, 2 baños."
+        let draft = try await parser.parse(listing)
+        #expect(draft.fhaEligibility.value == .eligible)
+        #expect(draft.fhaEligibility.confidence == .high)
+    }
+
+    @Test func detectsNoAplicaFHAAsNotEligible() async throws {
+        let listing = "Casa en venta. Precio Q2,500,000. No aplica FHA. 3 recámaras, 2 baños."
+        let draft = try await parser.parse(listing)
+        #expect(draft.fhaEligibility.value == .notEligible)
+        #expect(draft.fhaEligibility.confidence == .high)
+    }
+
+    @Test func noFHAMentionReturnsUnknown() async throws {
+        let listing = "Casa en venta. Precio Q2,500,000. 3 recámaras, 2 baños."
+        let draft = try await parser.parse(listing)
+        #expect(draft.fhaEligibility.value == .unknown)
+    }
+}
+
+// MARK: - Helpers (private)
+
+private func miniPropertyJSON(petPolicy: String) -> Data {
+    """
+    {"id":"x","internalCode":"SUN-001","title":"T","operationType":"rent","status":"available",
+     "price":1,"currency":"GTQ","maintenanceIncluded":false,"locationSummary":"Z","country":"Guatemala",
+     "bedrooms":1,"bathrooms":1.0,"amenities":[],"includedAppliances":[],"requirements":[],
+     "petPolicy":"\(petPolicy)","quickReplyTemplates":[],"isFavorite":false,
+     "createdAt":"2025-01-01T00:00:00Z","updatedAt":"2025-01-01T00:00:00Z"}
+    """.data(using: .utf8)!
 }
 
 // MARK: - Helpers

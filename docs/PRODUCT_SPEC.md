@@ -59,7 +59,7 @@ Administrators and agents with edit rights may:
 - **Add amenities:** pool, gym, rooftop, parking type, and similar.
 - **Add appliances and included/excluded items.**
 - **Set requirements:** credit check, employment proof, income multiplier, etc.
-- **Set pet policy:** allowed, not allowed, allowed with deposit, or case-by-case.
+- **Set pet policy:** "Se acepta mascota", "No se aceptan mascotas", or "Sujeto a análisis de caso" (3 options).
 - **Add visit instructions:** how to schedule, who to contact, access notes.
 - **Create quick-reply templates** scoped to a specific property.
 - **Search and filter** the catalog by title, status, price range, operation type, or location.
@@ -67,6 +67,7 @@ Administrators and agents with edit rights may:
 - **Import a listing description** via text paste (Milestone 1.1).
 - **Select a location on a map** or search for an address (Milestone 1.1).
 - **Control location sharing** — decide whether exact coordinates are visible in the keyboard cache (Milestone 1.1).
+- **Set sale financing information** (sale properties only): seller financing status, bank financing availability, FHA eligibility, and optional notes (Milestone 1.1 refinement).
 
 ### 3.2 Automatic Internal Codes
 

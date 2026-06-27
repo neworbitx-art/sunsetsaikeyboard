@@ -51,6 +51,12 @@ struct Property: Identifiable, Codable, Equatable {
     var petPolicy: PetPolicy
     var visitInstructions: String?
 
+    // MARK: - Financing (sale only)
+    var sellerFinancingStatus: SellerFinancingStatus = .unknown
+    var bankFinancingAssistanceAvailable: Bool = false
+    var fhaEligibility: FHAEligibility = .unknown
+    var financingNotes: String? = nil
+
     // MARK: - Templates
     var quickReplyTemplates: [QuickReplyTemplate]
 
@@ -118,6 +124,7 @@ struct Property: Identifiable, Codable, Equatable {
         case floorNumber, totalFloors
         case amenities, includedAppliances, includedItems, excludedItems
         case requirements, petPolicy, visitInstructions
+        case sellerFinancingStatus, bankFinancingAssistanceAvailable, fhaEligibility, financingNotes
         case quickReplyTemplates
         case isFavorite
         case lastVerifiedAt, createdAt, updatedAt
@@ -169,8 +176,24 @@ extension Property {
         includedItems       = try c.decodeIfPresent([String].self, forKey: .includedItems) ?? []
         excludedItems       = try c.decodeIfPresent([String].self, forKey: .excludedItems) ?? []
         requirements        = try c.decodeIfPresent([String].self, forKey: .requirements) ?? []
-        petPolicy           = try c.decodeIfPresent(PetPolicy.self, forKey: .petPolicy) ?? .notAllowed
+
+        // Migrate legacy pet policy values to the current 3-case enum.
+        // "allowedWithDeposit" and "caseByCase" both map to .subjectToCaseAnalysis.
+        let rawPetPolicy = try c.decodeIfPresent(String.self, forKey: .petPolicy) ?? PetPolicy.notAllowed.rawValue
+        switch rawPetPolicy {
+        case PetPolicy.allowed.rawValue:               petPolicy = .allowed
+        case PetPolicy.notAllowed.rawValue:            petPolicy = .notAllowed
+        case "allowedWithDeposit", "caseByCase",
+             PetPolicy.subjectToCaseAnalysis.rawValue: petPolicy = .subjectToCaseAnalysis
+        default:                                       petPolicy = .notAllowed
+        }
+
         visitInstructions   = try c.decodeIfPresent(String.self, forKey: .visitInstructions)
+
+        sellerFinancingStatus          = try c.decodeIfPresent(SellerFinancingStatus.self, forKey: .sellerFinancingStatus) ?? .unknown
+        bankFinancingAssistanceAvailable = try c.decodeIfPresent(Bool.self, forKey: .bankFinancingAssistanceAvailable) ?? false
+        fhaEligibility                 = try c.decodeIfPresent(FHAEligibility.self, forKey: .fhaEligibility) ?? .unknown
+        financingNotes                 = try c.decodeIfPresent(String.self, forKey: .financingNotes)
 
         quickReplyTemplates = try c.decodeIfPresent([QuickReplyTemplate].self, forKey: .quickReplyTemplates) ?? []
 

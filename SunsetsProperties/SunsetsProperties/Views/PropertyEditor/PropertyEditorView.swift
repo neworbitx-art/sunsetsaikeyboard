@@ -26,6 +26,9 @@ struct PropertyEditorView: View {
                 spaceSection
                 featuresSection
                 requirementsSection
+                if vm.operationType == .sale || vm.operationType == .rentOrSale {
+                    financingSection
+                }
                 visitSection
 
                 if !vm.validationErrors.isEmpty {
@@ -317,6 +320,32 @@ struct PropertyEditorView: View {
                 TextEditor(text: $vm.requirementsText)
                     .frame(minHeight: 80)
                     .accessibilityLabel("Requisitos, uno por línea")
+            }
+        }
+    }
+
+    // MARK: - Financing (sale only)
+
+    private var financingSection: some View {
+        Section("Financiamiento") {
+            Picker("Financ. del vendedor", selection: $vm.sellerFinancingStatus) {
+                ForEach(SellerFinancingStatus.allCases) { s in
+                    Text(s.label).tag(s)
+                }
+            }
+            Toggle("Asistencia bancaria disponible", isOn: $vm.bankFinancingAssistanceAvailable)
+            Picker("Elegibilidad FHA", selection: $vm.fhaEligibility) {
+                ForEach(FHAEligibility.allCases) { e in
+                    Text(e.label).tag(e)
+                }
+            }
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Notas de financiamiento (opcional)")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                TextEditor(text: $vm.financingNotesText)
+                    .frame(minHeight: 60)
+                    .accessibilityLabel("Notas de financiamiento")
             }
         }
     }

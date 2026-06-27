@@ -1,6 +1,6 @@
 # Property Schema — Sunsets AI Keyboard
 
-**Version:** 0.3 (Milestone 1.1 — Pending approval)
+**Version:** 0.4 (Milestone 1.1 refinement — pet policy, sale financing, FHA)
 **Last updated:** 2026-06-27
 **Status:** Pending approval
 
@@ -108,8 +108,14 @@ Property
 ├── excludedItems: [String]         // Items present but excluded from the transaction
 │
 ├── requirements: [String]          // e.g., ["Credit check", "3 months deposit"]
-├── petPolicy: PetPolicy            // allowed | notAllowed | allowedWithDeposit | caseByCase
+├── petPolicy: PetPolicy            // allowed | notAllowed | subjectToCaseAnalysis
 ├── visitInstructions: String?      // How to schedule or access for a visit
+│
+├── ── FINANCING (sale only) ──
+├── sellerFinancingStatus: SellerFinancingStatus  // unavailable | available | unknown
+├── bankFinancingAssistanceAvailable: Bool        // Default: false
+├── fhaEligibility: FHAEligibility               // eligible | notEligible | unknown (never inferred)
+├── financingNotes: String?
 │
 ├── quickReplyTemplates: [QuickReplyTemplate]  // Property-specific templates
 │
@@ -196,12 +202,34 @@ KeyboardProperty
 
 ### PetPolicy
 
+3 cases as of Milestone 1.1 refinement. Legacy values `allowedWithDeposit` and `caseByCase` migrate to `subjectToCaseAnalysis` on decode.
+
 ```swift
 enum PetPolicy: String, Codable {
-    case allowed
-    case notAllowed
-    case allowedWithDeposit
-    case caseByCase
+    case allowed               // "Se acepta mascota"
+    case notAllowed            // "No se aceptan mascotas"
+    case subjectToCaseAnalysis // "Sujeto a análisis de caso"
+    // Removed: allowedWithDeposit, caseByCase (both → subjectToCaseAnalysis via migration)
+}
+```
+
+### SellerFinancingStatus
+
+```swift
+enum SellerFinancingStatus: String, Codable {
+    case unavailable // No seller financing; bank financing may still apply
+    case available   // Seller provides financing
+    case unknown     // Not confirmed (default)
+}
+```
+
+### FHAEligibility
+
+```swift
+enum FHAEligibility: String, Codable {
+    case eligible    // Explicitly confirmed: "Aplica FHA"
+    case notEligible // Explicitly confirmed: "No aplica FHA"
+    case unknown     // No mention in listing — never inferred (default)
 }
 ```
 
@@ -260,7 +288,9 @@ PropertyDraft
 ├── visitInstructions: DraftField<String>
 ├── contactInfo: DraftField<String>     // Extracted contact — displayed for reference only
 │                                       //   Never saved to the Property model
-└── hashtags: DraftField<[String]>      // Informational only; not mapped to Property fields
+├── hashtags: DraftField<[String]>      // Informational only; not mapped to Property fields
+├── sellerFinancingStatus: DraftField<SellerFinancingStatus>  // From explicit statements only
+└── fhaEligibility: DraftField<FHAEligibility>               // "Aplica FHA" / "No aplica FHA" only
 ```
 
 ### DraftField
@@ -367,6 +397,12 @@ Properties created during Milestone 1 do not have the new fields. On first launc
 | `isExactLocationShareable` | `false` |
 | `includedItems` | `[]` |
 | `excludedItems` | `[]` |
+| `sellerFinancingStatus` | `.unknown` |
+| `bankFinancingAssistanceAvailable` | `false` |
+| `fhaEligibility` | `.unknown` |
+| `financingNotes` | `nil` |
+| `petPolicy: "allowedWithDeposit"` | decoded as `.subjectToCaseAnalysis` |
+| `petPolicy: "caseByCase"` | decoded as `.subjectToCaseAnalysis` |
 
 Because `LocalPropertyRepository` uses a JSON file, new optional fields decode to `nil` automatically when absent, and new non-optional fields with defaults (`locationSource: .manual`, `isExactLocationShareable: false`) require the decoder to supply a default.
 

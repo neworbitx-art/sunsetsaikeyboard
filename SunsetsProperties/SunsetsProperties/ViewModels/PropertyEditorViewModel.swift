@@ -51,6 +51,12 @@ final class PropertyEditorViewModel {
     var visitInstructions: String = ""
     var isFavorite: Bool = false
 
+    // MARK: - Financing (sale only)
+    var sellerFinancingStatus: SellerFinancingStatus = .unknown
+    var bankFinancingAssistanceAvailable: Bool = false
+    var fhaEligibility: FHAEligibility = .unknown
+    var financingNotesText: String = ""
+
     // MARK: - State
     var validationErrors: [String] = []
     var isGeneratingCode: Bool = false
@@ -125,6 +131,11 @@ final class PropertyEditorViewModel {
         petPolicy = property.petPolicy
         visitInstructions = property.visitInstructions ?? ""
         isFavorite = property.isFavorite
+
+        sellerFinancingStatus = property.sellerFinancingStatus
+        bankFinancingAssistanceAvailable = property.bankFinancingAssistanceAvailable
+        fhaEligibility = property.fhaEligibility
+        financingNotesText = property.financingNotes ?? ""
     }
 
     // MARK: - Load from Draft
@@ -152,6 +163,8 @@ final class PropertyEditorViewModel {
         if let exc = draft.excludedItems.value { excludedItemsText = exc.joined(separator: "\n") }
         if let req = draft.requirements.value { requirementsText = req.joined(separator: "\n") }
         if let vis = draft.visitInstructions.value { visitInstructions = vis }
+        if let fs = draft.sellerFinancingStatus.value { sellerFinancingStatus = fs }
+        if let fha = draft.fhaEligibility.value { fhaEligibility = fha }
     }
 
     // MARK: - Validate
@@ -271,6 +284,10 @@ final class PropertyEditorViewModel {
             requirements: parseLines(requirementsText),
             petPolicy: petPolicy,
             visitInstructions: nilIfEmpty(visitInstructions),
+            sellerFinancingStatus: sellerFinancingStatus,
+            bankFinancingAssistanceAvailable: bankFinancingAssistanceAvailable,
+            fhaEligibility: fhaEligibility,
+            financingNotes: nilIfEmpty(financingNotesText),
             quickReplyTemplates: [],
             isFavorite: isFavorite,
             lastVerifiedAt: nil,

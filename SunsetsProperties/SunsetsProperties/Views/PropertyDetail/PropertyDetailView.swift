@@ -13,6 +13,9 @@ struct PropertyDetailView: View {
             spaceSection
             featuresSection
             requirementsSection
+            if property.operationType == .sale || property.operationType == .rentOrSale {
+                financingSection
+            }
             metaSection
         }
         .listStyle(.insetGrouped)
@@ -164,6 +167,31 @@ struct PropertyDetailView: View {
                         Label(req, systemImage: "doc.text")
                     }
                 }
+            }
+        }
+    }
+
+    private var financingSection: some View {
+        Section("Financiamiento") {
+            LabeledContent("Financ. del vendedor", value: property.sellerFinancingStatus.label)
+            LabeledContent("Elegibilidad FHA", value: property.fhaEligibility.label)
+            if let text = FinancingTextService.text(for: property) {
+                Text(text)
+                    .font(.callout)
+            }
+            if let warning = FinancingTextService.fhaWarning(for: property) {
+                HStack(spacing: 6) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.orange)
+                    Text(warning)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            if let notes = property.financingNotes {
+                Text(notes)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
         }
     }

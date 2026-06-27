@@ -27,6 +27,13 @@ Built the main SwiftUI application with a functional local property catalog usin
 
 **Status:** Approved and complete (2026-06-27). Manually validated by Nox on 2026-06-27.
 
+**Refinement approved and complete (2026-06-27). Manually validated by Nox on 2026-06-27:**
+- `PetPolicy` reduced to 3 cases (`subjectToCaseAnalysis` replaces `allowedWithDeposit` + `caseByCase`).
+- Sale financing model: `SellerFinancingStatus`, `FHAEligibility`, `FinancingTextService`.
+- Financing UI section (sale only) in editor and detail views.
+- FHA detection in `LocalListingParser` (explicit phrases only; never inferred).
+- 14 new unit tests; 117 total, all pass.
+
 ### Objective
 Enrich the property model with structured location data, automatic internal codes, and a text-import workflow that creates a reviewable draft before any data is saved. All work remains offline and local.
 

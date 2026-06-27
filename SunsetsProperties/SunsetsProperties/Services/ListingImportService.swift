@@ -41,10 +41,12 @@ struct LocalListingParser: ListingImportService {
         draft.visitInstructions   = detectVisitInstructions(lower, lines: lines)
         draft.contactInfo         = detectContactInfo(text)
         draft.hashtags            = detectHashtags(text)
-        draft.locationSummary     = detectLocation(text, lower: lower, lines: lines)
-        draft.title               = detectTitle(lines, lower: lower,
-                                                location: draft.locationSummary.value)
-        draft.status              = DraftField(value: .available, confidence: .high)
+        draft.locationSummary       = detectLocation(text, lower: lower, lines: lines)
+        draft.title                 = detectTitle(lines, lower: lower,
+                                                  location: draft.locationSummary.value)
+        draft.status                = DraftField(value: .available, confidence: .high)
+        draft.fhaEligibility        = detectFHAEligibility(lower)
+        draft.sellerFinancingStatus = detectSellerFinancing(lower)
 
         return draft
     }
@@ -469,6 +471,36 @@ struct LocalListingParser: ListingImportService {
             return label
         }
         return nil
+    }
+
+    // MARK: - FHA eligibility
+
+    private func detectFHAEligibility(_ lower: String) -> DraftField<FHAEligibility> {
+        if lower.contains("no aplica fha") ||
+           lower.contains("no es elegible para fha") ||
+           lower.contains("sin opción fha") {
+            return DraftField(value: .notEligible, confidence: .high)
+        }
+        if lower.contains("aplica fha") ||
+           lower.contains("financiamiento fha disponible") ||
+           lower.contains("elegible para fha") {
+            return DraftField(value: .eligible, confidence: .high)
+        }
+        return DraftField(value: .unknown, confidence: .missing)
+    }
+
+    // MARK: - Seller financing
+
+    private func detectSellerFinancing(_ lower: String) -> DraftField<SellerFinancingStatus> {
+        if lower.contains("sin financiamiento del vendedor") ||
+           lower.contains("no hay financiamiento del vendedor") {
+            return DraftField(value: .unavailable, confidence: .high)
+        }
+        if lower.contains("financiamiento del vendedor") ||
+           lower.contains("el vendedor financia") {
+            return DraftField(value: .available, confidence: .high)
+        }
+        return DraftField(value: .unknown, confidence: .missing)
     }
 
     // MARK: - Helpers

@@ -1,6 +1,6 @@
 # Architecture — Sunsets AI Keyboard
 
-**Version:** 0.3 (Milestone 1.1 — Pending approval)
+**Version:** 0.4 (Milestone 1.1 refinement — pet policy, sale financing, FHA)
 **Last updated:** 2026-06-27
 **Status:** Pending approval
 
@@ -133,6 +133,14 @@ The full property model is defined in `docs/PROPERTY_SCHEMA.md` Section 5. It li
 - `includedItems: [String]`
 - `excludedItems: [String]`
 
+**Milestone 1.1 refinement additions (pet policy + financing):**
+- `sellerFinancingStatus: SellerFinancingStatus` — default `.unknown` (sale only)
+- `bankFinancingAssistanceAvailable: Bool` — default `false`
+- `fhaEligibility: FHAEligibility` — default `.unknown`; never inferred by parser
+- `financingNotes: String?` — optional free-text
+
+`PetPolicy` reduced from 4 cases to 3: `allowedWithDeposit` and `caseByCase` removed; `subjectToCaseAnalysis` added. Migration decoder maps legacy values to `.subjectToCaseAnalysis`.
+
 `latitude` and `longitude` existed in the schema since v0.2; they now have a defined UI path for setting them via map picker, address search, or URL import.
 
 ### 3.2 KeyboardProperty (Keyboard-Safe Cache)
@@ -207,7 +215,23 @@ struct LocationImportResult {
 
 Extracts coordinates from both `maps.app.goo.gl/…` short links (resolved via HTTP) and `google.com/maps?q=lat,lon` direct links.
 
-### 4.3 ListingImportService
+### 4.3 FinancingTextService (new — Milestone 1.1 refinement)
+
+Generates fixed, deterministic Spanish text for sale-property financing when shown in `PropertyDetailView` or composing keyboard replies.
+
+```swift
+enum FinancingTextService {
+    static func text(for property: Property) -> String?
+    // Returns nil for non-sale properties or when sellerFinancingStatus != .unavailable.
+    // Appends FHA paragraph only when fhaEligibility == .eligible.
+
+    static func fhaWarning(for property: Property) -> String?
+    // Returns "Elegibilidad FHA no confirmada." when fhaEligibility == .unknown and
+    // sellerFinancingStatus == .unavailable for a sale property.
+}
+```
+
+### 4.4 ListingImportService
 
 ```swift
 protocol ListingImportService {
@@ -246,10 +270,12 @@ SunsetsAI/
 │   │   ├── Property.swift
 │   │   ├── PropertyStatus.swift
 │   │   ├── OperationType.swift
-│   │   ├── PetPolicy.swift
+│   │   ├── PetPolicy.swift             # 3 cases (updated M1.1 refinement)
+│   │   ├── SellerFinancingStatus.swift  # NEW (M1.1 refinement)
+│   │   ├── FHAEligibility.swift        # NEW (M1.1 refinement)
 │   │   ├── QuickReplyTemplate.swift
 │   │   ├── LocationSource.swift        # NEW (Milestone 1.1)
-│   │   └── PropertyDraft.swift         # NEW (Milestone 1.1)
+│   │   └── PropertyDraft.swift         # NEW (Milestone 1.1; updated M1.1 refinement)
 │   ├── Repositories/
 │   │   ├── PropertyRepository.swift    # Protocol
 │   │   ├── LocalPropertyRepository.swift
@@ -258,7 +284,8 @@ SunsetsAI/
 │   │   ├── CatalogCacheService.swift
 │   │   ├── InternalCodeGenerator.swift  # NEW (Milestone 1.1)
 │   │   ├── LocationImportService.swift  # NEW (Milestone 1.1)
-│   │   └── ListingImportService.swift   # NEW (Milestone 1.1)
+│   │   ├── FinancingTextService.swift   # NEW (M1.1 refinement)
+│   │   └── ListingImportService.swift   # NEW (Milestone 1.1; FHA detection added M1.1 refinement)
 │   │       ├── LocalListingParser.swift
 │   │       └── ClaudeListingParser.swift  # Stub (Milestone 1.1); impl in Milestone 4
 │   ├── ViewModels/

@@ -67,6 +67,10 @@ struct PropertyDraft: Identifiable, Sendable {
     var contactInfo: DraftField<String>
     var hashtags: DraftField<[String]>
 
+    // MARK: - Financing (sale only)
+    var sellerFinancingStatus: DraftField<SellerFinancingStatus>
+    var fhaEligibility: DraftField<FHAEligibility>
+
     init(id: String = UUID().uuidString, sourceDescription: String, parserVersion: String) {
         self.id = id
         self.sourceDescription = sourceDescription
@@ -94,5 +98,7 @@ struct PropertyDraft: Identifiable, Sendable {
         self.visitInstructions = DraftField()
         self.contactInfo = DraftField()
         self.hashtags = DraftField()
+        self.sellerFinancingStatus = DraftField()
+        self.fhaEligibility = DraftField()
     }
 }

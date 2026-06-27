@@ -9,7 +9,9 @@
 
 Milestone 1 is **approved and complete** (2026-06-27). The local Sunsets Properties SwiftUI application was manually validated by Nox on 2026-06-27. All acceptance criteria confirmed on iPhone Simulator.
 
-Milestone 1.1 is **approved and complete** (2026-06-27). Manually validated by Nox on 2026-06-27. All acceptance criteria confirmed on iPhone 17 Simulator. Milestone 2 may now begin.
+Milestone 1.1 is **approved and complete** (2026-06-27). Manually validated by Nox on 2026-06-27. All acceptance criteria confirmed on iPhone 17 Simulator.
+
+Milestone 1.1 refinements (pet policy, sale financing, FHA) are **approved and complete** (2026-06-27). Manually validated by Nox on 2026-06-27. Milestone 2 may now begin.
 
 ---
 
@@ -90,13 +92,40 @@ Milestone 1.1 is **approved and complete** (2026-06-27). Manually validated by N
 - [x] Build: `** BUILD SUCCEEDED **` (iPhone 17 Simulator, iOS 26.5)
 - [x] Tests: `** TEST SUCCEEDED **`
 
+### Milestone 1.1 Refinement — Pet Policy, Sale Financing, FHA ✅ Approved 2026-06-27
+
+Manually validated by Nox on 2026-06-27.
+
+- [x] `Models/PetPolicy.swift` — reduced to 3 cases; `subjectToCaseAnalysis` replaces `allowedWithDeposit` + `caseByCase`
+- [x] `Models/SellerFinancingStatus.swift` — NEW (`.unavailable` / `.available` / `.unknown`)
+- [x] `Models/FHAEligibility.swift` — NEW (`.eligible` / `.notEligible` / `.unknown`)
+- [x] `Services/FinancingTextService.swift` — NEW (deterministic Spanish bank/FHA text)
+- [x] `Models/Property.swift` — 4 new financing fields; legacy `petPolicy` migration in decoder
+- [x] `Models/PropertyDraft.swift` — 2 new financing draft fields
+- [x] `Services/ListingImportService.swift` — FHA detection ("Aplica FHA" / "No aplica FHA"); seller financing from explicit statements only
+- [x] `ViewModels/PropertyEditorViewModel.swift` — financing fields
+- [x] `Views/PropertyEditor/PropertyEditorView.swift` — financing section (sale only)
+- [x] `Views/PropertyDetail/PropertyDetailView.swift` — financing display (sale only)
+- [x] `Views/ListingImport/DraftReviewView.swift` — FHA section in draft review
+- [x] 14 new unit tests (PetPolicyRefinement, SaleFinancing, FHAParser suites); 117 total, all pass
+- [x] Build: `** BUILD SUCCEEDED **`; Tests: `** TEST SUCCEEDED **`
+- [x] docs updated: PRODUCT_SPEC.md v0.4, ARCHITECTURE.md v0.4, PROPERTY_SCHEMA.md v0.4, DECISIONS.md (ADR-014), MILESTONES.md, TESTING.md, PROJECT_STATUS.md
+
+**Validated items:**
+- Pet-policy picker shows exactly 3 options; removed "Se aceptan mascotas con depósito"
+- Existing properties with legacy `caseByCase` / `allowedWithDeposit` load correctly
+- Sale-financing fields visible only for sale / rent-or-sale properties
+- FHA eligibility defaults to unknown; mentioned only when explicitly confirmed
+- Existing local properties remain backward compatible
+- No keyboard, AI, backend, Supabase, networking, or media changes
+
 ---
 
 ## Pending Work
 
 ### Milestone 2 — Local SunsetsAIKeyboard Extension (Not started)
 
-Awaiting implementation start after Milestone 1.1 approval. Scope defined in `docs/MILESTONES.md`.
+Awaiting implementation start. Scope defined in `docs/MILESTONES.md`.
 
 ---
 
@@ -203,4 +232,4 @@ Awaiting implementation start after Milestone 1.1 approval. Scope defined in `do
 
 ## Next Exact Task
 
-> **Implement Milestone 2 — Local SunsetsAIKeyboard Extension and shared keyboard-safe property catalog.**
+> **Implement Milestone 2 — Local SunsetsAIKeyboard and shared keyboard-safe property catalog.**
