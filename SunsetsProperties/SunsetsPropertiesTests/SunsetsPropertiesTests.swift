@@ -313,11 +313,10 @@ struct RepositoryTests {
         await vm.prepareForNew()
         let preview = vm.internalCode
         #expect(preview == "SUN-001")
-        // Validation fails (empty title)
-        vm.title = ""
+        // Validation fails (empty location)
         vm.priceText = "1000"
-        vm.locationSummary = "Zona 10"
         vm.currency = "GTQ"
+        // locationSummary stays "" — triggers validation failure
         let result = vm.buildProperty()
         #expect(result == nil)
         // Counter not advanced; next open still shows SUN-001
@@ -366,7 +365,6 @@ struct ValidationTests {
 
     @Test func validPropertyPassesValidation() {
         let vm = PropertyEditorViewModel()
-        vm.title = "Casa de Prueba"
         vm.setInternalCodeForTesting("SUN-999")
         vm.locationSummary = "Zona 10, Guatemala"
         vm.currency = "GTQ"
@@ -375,20 +373,8 @@ struct ValidationTests {
         #expect(vm.validationErrors.isEmpty)
     }
 
-    @Test func missingTitleFails() {
-        let vm = PropertyEditorViewModel()
-        vm.title = ""
-        vm.setInternalCodeForTesting("SUN-001")
-        vm.locationSummary = "Zona 10"
-        vm.currency = "GTQ"
-        vm.priceText = "1000"
-        #expect(vm.validate() == false)
-        #expect(vm.validationErrors.contains(where: { $0.contains("título") }))
-    }
-
     @Test func missingCodeFails() {
         let vm = PropertyEditorViewModel()
-        vm.title = "Casa"
         vm.setInternalCodeForTesting("")
         vm.locationSummary = "Zona 10"
         vm.currency = "GTQ"
@@ -399,7 +385,6 @@ struct ValidationTests {
 
     @Test func missingLocationFails() {
         let vm = PropertyEditorViewModel()
-        vm.title = "Casa"
         vm.setInternalCodeForTesting("SUN-001")
         vm.locationSummary = ""
         vm.currency = "GTQ"
@@ -410,7 +395,6 @@ struct ValidationTests {
 
     @Test func missingPriceFails() {
         let vm = PropertyEditorViewModel()
-        vm.title = "Casa"
         vm.setInternalCodeForTesting("SUN-001")
         vm.locationSummary = "Zona 10"
         vm.currency = "GTQ"
@@ -421,7 +405,6 @@ struct ValidationTests {
 
     @Test func negativePriceProducesError() {
         let vm = PropertyEditorViewModel()
-        vm.title = "Casa"
         vm.setInternalCodeForTesting("SUN-001")
         vm.locationSummary = "Zona 10"
         vm.currency = "GTQ"
@@ -432,7 +415,6 @@ struct ValidationTests {
 
     @Test func negativeMaintenanceFeeProducesError() {
         let vm = PropertyEditorViewModel()
-        vm.title = "Casa"
         vm.setInternalCodeForTesting("SUN-001")
         vm.locationSummary = "Zona 10"
         vm.currency = "GTQ"
@@ -443,7 +425,6 @@ struct ValidationTests {
 
     @Test func negativeDepositProducesError() {
         let vm = PropertyEditorViewModel()
-        vm.title = "Casa"
         vm.setInternalCodeForTesting("SUN-001")
         vm.locationSummary = "Zona 10"
         vm.currency = "GTQ"
@@ -454,21 +435,21 @@ struct ValidationTests {
 
     @Test func buildPropertyReturnsNilWhenInvalid() {
         let vm = PropertyEditorViewModel()
-        vm.title = ""
+        // No code, no location — validation fails
         vm.priceText = "1000"
         #expect(vm.buildProperty() == nil)
     }
 
     @Test func buildPropertySucceedsWhenValid() {
         let vm = PropertyEditorViewModel()
-        vm.title = "Casa"
+        vm.displayTitle = "Casa en Zona 10"
         vm.setInternalCodeForTesting("SUN-001")
         vm.locationSummary = "Zona 10"
         vm.currency = "GTQ"
         vm.priceText = "5000"
         let result = vm.buildProperty()
         #expect(result != nil)
-        #expect(result?.title == "Casa")
+        #expect(result?.displayTitle == "Casa en Zona 10")
         #expect(result?.price == 5000)
     }
 }
@@ -1193,6 +1174,7 @@ private func miniPropertyJSON(petPolicy: String) -> Data {
 func makeSampleProperty(
     id: String = UUID().uuidString,
     title: String = "Propiedad de Prueba",
+    displayTitle: String? = nil,  // defaults to title when nil
     code: String = "SUN-TEST",
     location: String = "Antigua Guatemala",
     status: PropertyStatus = .available,
@@ -1206,6 +1188,7 @@ func makeSampleProperty(
         id: id,
         internalCode: code,
         title: title,
+        displayTitle: displayTitle ?? title,
         operationType: operation,
         status: status,
         price: price,
@@ -1234,6 +1217,429 @@ func makeSampleProperty(
         createdAt: now,
         updatedAt: now
     )
+}
+
+// MARK: - Bathroom parsing refinement tests
+
+@Suite("BathroomParsingRefinement")
+struct BathroomParsingRefinementTests {
+    let parser = LocalListingParser()
+
+    @Test("2 baños returns 2.0")
+    func testTwoBaths() async throws {
+        let draft = try await parser.parse("Apartamento en renta Q 3,000\n2 baños\n1 recámara")
+        #expect(draft.bathrooms.value == 2.0)
+        #expect(draft.bathrooms.confidence == .high)
+    }
+
+    @Test("1 baño y medio returns 1.5")
+    func testOneAndHalf() async throws {
+        let draft = try await parser.parse("Casa en renta Q 5,000\n1 baño y medio\n3 recámaras")
+        #expect(draft.bathrooms.value == 1.5)
+        #expect(draft.bathrooms.confidence == .high)
+    }
+
+    @Test("2 baños y medio returns 2.5")
+    func testTwoAndHalf() async throws {
+        let draft = try await parser.parse("Casa en renta Q 8,000\n2 baños y medio\n4 recámaras")
+        #expect(draft.bathrooms.value == 2.5)
+    }
+
+    @Test("medio baño returns 0.5")
+    func testMedioBano() async throws {
+        let draft = try await parser.parse("Apartamento Q 2,500\nmedio baño")
+        #expect(draft.bathrooms.value == 0.5)
+    }
+
+    @Test("1/2 baño returns 0.5")
+    func testHalfBanoSlash() async throws {
+        let draft = try await parser.parse("Townhouse Q 9,000\n1/2 baño adicional")
+        #expect(draft.bathrooms.value == 0.5)
+    }
+
+    @Test("2.5 baños returns 2.5")
+    func testDecimalBanos() async throws {
+        let draft = try await parser.parse("Casa en venta Q 1,450,000\n2.5 baños\n4 recámaras")
+        #expect(draft.bathrooms.value == 2.5)
+    }
+}
+
+// MARK: - Sanitization tests
+
+@Suite("ListingSanitization")
+struct ListingSanitizationTests {
+    let parser = LocalListingParser()
+
+    @Test("Hashtag-only line is excluded from structured fields")
+    func testHashtagLineRemoved() async throws {
+        let listing = """
+        Casa en renta Q 5,000
+        3 recámaras 2 baños
+        Ubicada en Zona 10
+        #casaenrenta #sunsets #guatemala #inmobiliaria
+        """
+        let draft = try await parser.parse(listing)
+        // hashtags field captures originals; title/location should not contain "#"
+        #expect(draft.title.value?.contains("#") != true)
+        #expect(draft.locationSummary.value?.contains("#") != true)
+    }
+
+    @Test("Contact footer lines are excluded")
+    func testContactFooterRemoved() async throws {
+        let listing = """
+        Apartamento en renta Q 4,200
+        2 recámaras 1 baño
+        Santa Catarina Pinula
+        Contáctenos: 5555-5555
+        """
+        let draft = try await parser.parse(listing)
+        // visitInstructions should not be contaminated with the contact line
+        let visit = draft.visitInstructions.value ?? ""
+        #expect(!visit.lowercased().contains("contáctenos"))
+    }
+
+    @Test("Company signature lines are excluded from title")
+    func testCompanySignatureExcluded() async throws {
+        let listing = """
+        Casa en venta Q 1,200,000
+        3 recámaras
+        Zona 15
+        Sunsets Real Estate — exclusiva
+        """
+        let draft = try await parser.parse(listing)
+        #expect(draft.title.value?.lowercased().contains("sunsets") != true)
+    }
+
+    @Test("Clean content is not affected by sanitization")
+    func testCleanContentPreserved() async throws {
+        let listing = "Apartamento en renta Q 4,200\n2 recámaras\n1 baño\nZona 10 Guatemala"
+        let draft = try await parser.parse(listing)
+        #expect(draft.bathrooms.value != nil)
+        #expect(draft.bedrooms.value != nil)
+    }
+}
+
+// MARK: - Property type detection tests
+
+@Suite("PropertyTypeDetection")
+struct PropertyTypeDetectionTests {
+    let parser = LocalListingParser()
+
+    @Test("Apartamento maps to .apartment")
+    func testApartamento() async throws {
+        let draft = try await parser.parse("Apartamento en renta Q 4,200 Zona 10")
+        #expect(draft.propertyType.value == .apartment)
+    }
+
+    @Test("Townhouse maps to .townhouse")
+    func testTownhouse() async throws {
+        let draft = try await parser.parse("Townhouse en venta Q 1,500,000 San Lucas")
+        #expect(draft.propertyType.value == .townhouse)
+    }
+
+    @Test("Casa maps to .house")
+    func testCasa() async throws {
+        let draft = try await parser.parse("Casa en renta Q 6,000 Carretera a El Salvador")
+        #expect(draft.propertyType.value == .house)
+    }
+
+    @Test("Terreno maps to .land")
+    func testTerreno() async throws {
+        let draft = try await parser.parse("Terreno en venta Q 500,000 Antigua Guatemala")
+        #expect(draft.propertyType.value == .land)
+    }
+}
+
+// MARK: - Development name extraction tests
+
+@Suite("DevelopmentNameExtraction")
+struct DevelopmentNameExtractionTests {
+    let parser = LocalListingParser()
+
+    @Test("Residencial prefix is extracted")
+    func testResidencialPrefix() async throws {
+        let listing = """
+        Apartamento en Residencial Las Brisas
+        Q 4,500 mensuales
+        2 recámaras 1 baño
+        """
+        let draft = try await parser.parse(listing)
+        #expect(draft.developmentName.value?.lowercased().contains("residencial") == true)
+    }
+
+    @Test("Torre prefix is extracted")
+    func testTorrePrefix() async throws {
+        let listing = """
+        Apartamento en Torre Cayalá
+        Q 8,000 mensuales renta
+        2 recámaras
+        """
+        let draft = try await parser.parse(listing)
+        #expect(draft.developmentName.value?.lowercased().contains("torre") == true)
+    }
+
+    @Test("No development keyword leaves nil")
+    func testNoDevelopmentName() async throws {
+        let draft = try await parser.parse("Casa en renta Q 5,000 Zona 14")
+        #expect(draft.developmentName.value == nil)
+    }
+}
+
+// MARK: - Included items inline extraction tests
+
+@Suite("IncludedItemsExtraction")
+struct IncludedItemsExtractionTests {
+    let parser = LocalListingParser()
+
+    @Test("Inline incluye: list is parsed")
+    func testInlineIncluye() async throws {
+        let listing = "Casa en renta Q 6,000\n2 recámaras 1 baño\nIncluye: cortinas, escritorios, sillas de oficina"
+        let draft = try await parser.parse(listing)
+        #expect((draft.includedItems.value?.count ?? 0) >= 2)
+    }
+
+    @Test("Section-based incluye list is parsed")
+    func testSectionIncluye() async throws {
+        let listing = """
+        Apartamento Q 5,000
+        1 recámara 1 baño
+        Se incluyen:
+        • Cortinas
+        • Calentador de agua
+        • Closets empotrados
+        """
+        let draft = try await parser.parse(listing)
+        #expect((draft.includedItems.value?.count ?? 0) >= 2)
+    }
+}
+
+// MARK: - General info template tests
+
+@Suite("GeneralInfoTemplate")
+struct GeneralInfoTemplateTests {
+
+    private func makeProperty(
+        status: PropertyStatus = .available,
+        operationType: OperationType = .rent,
+        price: Decimal = 5000,
+        publicListingText: String? = nil,
+        publicDescription: String? = nil,
+        requirements: [String] = ["DPI", "Recibos de ingresos"],
+        isExactLocationShareable: Bool = false,
+        latitude: Double? = nil,
+        longitude: Double? = nil,
+        googleMapsURL: String? = nil
+    ) -> KeyboardSafeProperty {
+        var prop = Property(
+            id: UUID().uuidString,
+            internalCode: "SUN-001",
+            propertyType: .apartment,
+            title: "Apartamento de prueba",
+            operationType: operationType,
+            status: status,
+            publicDescription: publicDescription,
+            price: price,
+            currency: "GTQ",
+            maintenanceFee: nil,
+            maintenanceIncluded: false,
+            deposit: nil,
+            locationSummary: "Zona 10, Guatemala",
+            neighborhood: nil,
+            city: "Guatemala",
+            state: nil,
+            country: "Guatemala",
+            latitude: latitude,
+            longitude: longitude,
+            googleMapsURL: googleMapsURL,
+            isExactLocationShareable: isExactLocationShareable,
+            bedrooms: 2,
+            bathrooms: 1,
+            halfBathrooms: nil,
+            parkingSpaces: 1,
+            areaSquareMeters: 80,
+            amenities: [],
+            includedAppliances: [],
+            requirements: requirements,
+            petPolicy: .notAllowed,
+            visitInstructions: nil,
+            quickReplyTemplates: [],
+            isFavorite: false,
+            lastVerifiedAt: nil,
+            createdAt: Date(),
+            updatedAt: Date()
+        )
+        prop.publicListingText = publicListingText
+        return KeyboardSafeProperty(projecting: prop)
+    }
+
+    @Test("generalInfo for available property with no listing text shows price and requirements")
+    func testAvailablePropertyInfo() {
+        let p = makeProperty(status: .available)
+        let text = TemplateEngine.generalInfo(for: p)
+        #expect(text.contains("Precio:"))
+        #expect(text.contains("Requisitos:"))
+    }
+
+    @Test("generalInfo for unavailable property shows warning")
+    func testUnavailableWarning() {
+        let p = makeProperty(status: .reserved)
+        let text = TemplateEngine.generalInfo(for: p)
+        #expect(text.contains("⚠️"))
+        #expect(text.contains("reservada"))
+    }
+
+    @Test("generalInfo uses publicListingText as primary body")
+    func testPublicListingTextUsedAsPrimaryBody() {
+        let listing = "Hermoso apartamento con vista panorámica. 3 recámaras."
+        let p = makeProperty(publicListingText: listing)
+        let text = TemplateEngine.generalInfo(for: p)
+        #expect(text.contains(listing))
+    }
+
+    @Test("generalInfo falls back to publicDescription when no listing text")
+    func testPublicDescriptionFallback() {
+        let desc = "Descripción corta del apartamento."
+        let p = makeProperty(publicDescription: desc)
+        let text = TemplateEngine.generalInfo(for: p)
+        #expect(text.contains(desc))
+    }
+
+    @Test("generalInfo suppresses price when listing text contains precio")
+    func testPriceSuppressedWhenInListing() {
+        let listing = "Precio: Q 5,000 mensuales. Bonito apartamento en Zona 10."
+        let p = makeProperty(publicListingText: listing)
+        let text = TemplateEngine.generalInfo(for: p)
+        // Should NOT append a redundant "Precio:" line
+        let priceCount = text.components(separatedBy: "Precio:").count - 1
+        #expect(priceCount == 1)  // only one from the listing itself
+    }
+
+    @Test("generalInfo suppresses requirements when listing text mentions requisitos")
+    func testRequirementsSuppressedWhenInListing() {
+        let listing = "Requisitos: DPI, constancia de ingresos."
+        let p = makeProperty(publicListingText: listing, requirements: ["DPI"])
+        let text = TemplateEngine.generalInfo(for: p)
+        let reqCount = text.components(separatedBy: "Requisitos").count - 1
+        #expect(reqCount == 1)
+    }
+
+    @Test("generalInfo uses fallback when no requirements and no listing")
+    func testNoRequirementsFallback() {
+        let p = makeProperty(requirements: [])
+        let text = TemplateEngine.generalInfo(for: p)
+        #expect(text.contains("Permítame confirmar"))
+    }
+
+    @Test("generalInfo appends coordinate-based maps links when exact location shareable")
+    func testMapsLinksWithCoordinates() {
+        let p = makeProperty(isExactLocationShareable: true,
+                             latitude: 14.6349, longitude: -90.5069)
+        let text = TemplateEngine.generalInfo(for: p)
+        #expect(text.contains("Google Maps:"))
+        #expect(text.contains("Waze:"))
+        #expect(text.contains("14.634900"))
+    }
+}
+
+// MARK: - Display title tests
+
+@Suite("DisplayTitle")
+struct DisplayTitleTests {
+
+    @Test("buildCanonicalTitle: type en operation · developmentName")
+    func testFullDisplayTitle() {
+        let title = Property.buildCanonicalTitle(
+            propertyType: .apartment, operationType: .sale,
+            developmentName: "Terrazas de Villaflores", neighborhoodName: "Zona 14",
+            publicLocationLabel: nil, locationSummary: "Zona 10"
+        )
+        #expect(title == "Apartamento en venta · Terrazas de Villaflores")
+    }
+
+    @Test("buildCanonicalTitle falls back to neighborhoodName when no developmentName")
+    func testNeighborhoodFallback() {
+        let title = Property.buildCanonicalTitle(
+            propertyType: .house, operationType: .rent,
+            developmentName: nil, neighborhoodName: "Zona 15",
+            publicLocationLabel: nil, locationSummary: "Zona 10"
+        )
+        #expect(title == "Casa en renta · Zona 15")
+    }
+
+    @Test("buildCanonicalTitle omits typeOp for .other, shows location only")
+    func testOtherTypeOmitted() {
+        let title = Property.buildCanonicalTitle(
+            propertyType: .other, operationType: .sale,
+            developmentName: nil, neighborhoodName: nil,
+            publicLocationLabel: nil, locationSummary: "Antigua Guatemala"
+        )
+        #expect(title == "Antigua Guatemala")
+    }
+
+    @Test("Migration: legacy JSON without displayTitle is migrated on decode")
+    func testMigrationFromLegacyJSON() throws {
+        let json = """
+        {
+            "id": "mig-001", "internalCode": "SUN-099",
+            "propertyType": "house", "developmentName": "Residenciales Sol",
+            "title": "Casa bonita",
+            "operationType": "rent", "status": "available",
+            "price": 5000, "currency": "GTQ", "maintenanceIncluded": false,
+            "locationSummary": "Zona 10", "country": "Guatemala",
+            "bedrooms": 2, "bathrooms": 1.0, "parkingSpaces": 1,
+            "areaSquareMeters": 80, "amenities": [], "includedAppliances": [],
+            "requirements": [], "petPolicy": "notAllowed", "quickReplyTemplates": [],
+            "isFavorite": false, "createdAt": "2025-01-01T00:00:00Z", "updatedAt": "2025-01-01T00:00:00Z"
+        }
+        """.data(using: .utf8)!
+        let decoder = JSONDecoder(); decoder.dateDecodingStrategy = .iso8601
+        let p = try decoder.decode(Property.self, from: json)
+        #expect(p.displayTitle == "Casa en renta · Residenciales Sol")
+    }
+}
+
+// MARK: - General message template tests
+
+@Suite("GeneralMessageTemplate")
+struct GeneralMessageTemplateTests {
+
+    @Test("GeneralMessageTemplate.new() has correct defaults")
+    func testNewTemplateDefaults() {
+        let t = GeneralMessageTemplate.new(category: .welcome)
+        #expect(t.isEnabled == true)
+        #expect(t.isKeyboardVisible == true)   // must default true so new messages reach keyboard
+        #expect(t.requiresReviewBeforeInsertion == true)
+        #expect(t.category == .welcome)
+    }
+
+    @Test("KeyboardSafeGeneralMessage projection maps fields correctly")
+    func testProjection() {
+        let t = GeneralMessageTemplate(
+            id: UUID(),
+            title: "Bienvenida",
+            category: .welcome,
+            body: "Hola, bienvenido.",
+            isEnabled: true,
+            isKeyboardVisible: true,
+            requiresReviewBeforeInsertion: false,
+            sortOrder: 0,
+            createdAt: Date(),
+            updatedAt: Date()
+        )
+        let safe = KeyboardSafeGeneralMessage(projecting: t)
+        #expect(safe.title == "Bienvenida")
+        #expect(safe.body == "Hola, bienvenido.")
+        #expect(safe.category == "welcome")
+        #expect(safe.requiresReviewBeforeInsertion == false)
+    }
+
+    @Test("GeneralMessageCategory labels are correct Spanish")
+    func testCategoryLabels() {
+        #expect(GeneralMessageCategory.welcome.label == "Bienvenida")
+        #expect(GeneralMessageCategory.qualification.label == "Filtro de cliente")
+        #expect(GeneralMessageCategory.reservationPayment.label == "Pago de reserva")
+        #expect(GeneralMessageCategory.visitCoordination.label == "Coordinación de visita")
+    }
 }
 
 // MARK: - Stub Repository
@@ -1281,5 +1687,1143 @@ final class StubRepository: PropertyRepository {
         !properties.contains { p in
             p.internalCode.uppercased() == code.uppercased() && p.id != excludingId
         }
+    }
+}
+
+// MARK: - Arboretto fixture regression tests
+
+@Suite("ArborettoFixture")
+struct ArborettoFixtureTests {
+
+    private let arborettoListing = """
+    Casa en venta | Residenciales Arboretto
+    Santa Catarina Pinula, Guatemala
+
+    Hermosa casa en venta en Residenciales Arboretto.
+    3 recámaras, 2.5 baños, 2 parqueos.
+    La propiedad cuenta con bodega de almacenamiento incluida.
+    Precio: Q 1,850,000
+
+    Requisitos: DPI, carta de ingresos.
+
+    Contáctanos para más información.
+    Agenda tu visita hoy.
+    """
+
+    @Test("Arboretto: propertyType detected as house, not warehouse")
+    func testPropertyTypeIsHouseNotWarehouse() async throws {
+        let parser = LocalListingParser()
+        let draft = try await parser.parse(arborettoListing)
+        #expect(draft.propertyType.value == .house)
+    }
+
+    @Test("Arboretto: developmentName extracted as Residenciales Arboretto")
+    func testDevelopmentNameExtracted() async throws {
+        let parser = LocalListingParser()
+        let draft = try await parser.parse(arborettoListing)
+        #expect(draft.developmentName.value == "Residenciales Arboretto")
+    }
+
+    @Test("Arboretto: operationType detected as sale")
+    func testOperationTypeIsSale() async throws {
+        let parser = LocalListingParser()
+        let draft = try await parser.parse(arborettoListing)
+        #expect(draft.operationType.value == .sale)
+    }
+
+    @Test("Arboretto: locationSummary contains Santa Catarina Pinula")
+    func testLocationExtracted() async throws {
+        let parser = LocalListingParser()
+        let draft = try await parser.parse(arborettoListing)
+        let location = draft.locationSummary.value ?? ""
+        #expect(location.contains("Santa Catarina Pinula"))
+    }
+
+    @Test("Arboretto: publicListingText excludes CTA lines")
+    func testCTALinesRemoved() async throws {
+        let parser = LocalListingParser()
+        let draft = try await parser.parse(arborettoListing)
+        let text = draft.publicListingText.value ?? ""
+        #expect(!text.lowercased().contains("contáctanos"))
+        #expect(!text.lowercased().contains("agenda tu visita"))
+    }
+
+    @Test("Arboretto: development name detected and canonical title computed correctly")
+    func testDisplayTitle() async throws {
+        let parser = LocalListingParser()
+        let draft = try await parser.parse(arborettoListing)
+
+        #expect(draft.developmentName.value == "Residenciales Arboretto")
+
+        let type = draft.propertyType.value ?? .other
+        let op   = draft.operationType.value ?? .sale
+        let dev  = draft.developmentName.value
+
+        let canonical = Property.buildCanonicalTitle(
+            propertyType: type, operationType: op,
+            developmentName: dev, neighborhoodName: nil,
+            publicLocationLabel: nil,
+            locationSummary: draft.locationSummary.value ?? ""
+        )
+        #expect(canonical == "Casa en venta · Residenciales Arboretto")
+    }
+}
+
+// MARK: - Waze URL tests
+
+@Suite("WazeURL")
+struct WazeURLTests {
+
+    @Test("wazeURL is coordinate-based when exact location shareable")
+    func testCoordinateBasedWazeURL() {
+        var p = Property(
+            id: "w1", internalCode: "SUN-W01", title: "Test", operationType: .rent,
+            status: .available, price: 1000, currency: "GTQ",
+            maintenanceFee: nil, maintenanceIncluded: false, deposit: nil,
+            locationSummary: "Zona 10",
+            neighborhood: nil, city: nil, state: nil, country: "Guatemala",
+            latitude: 14.6349, longitude: -90.5069,
+            isExactLocationShareable: true,
+            bedrooms: 1, bathrooms: 1, parkingSpaces: 0, areaSquareMeters: 50,
+            amenities: [], includedAppliances: [], requirements: [],
+            petPolicy: .notAllowed, visitInstructions: nil, quickReplyTemplates: [],
+            isFavorite: false, lastVerifiedAt: nil, createdAt: Date(), updatedAt: Date()
+        )
+        let kp = KeyboardSafeProperty(projecting: p)
+        #expect(kp.wazeURL?.contains("ll=14.634900") == true)
+        #expect(kp.wazeURL?.contains("navigate=yes") == true)
+    }
+
+    @Test("wazeURL is search-based when location not shareable but label exists")
+    func testSearchBasedWazeURL() {
+        var p = Property(
+            id: "w2", internalCode: "SUN-W02", title: "Test", operationType: .rent,
+            status: .available, price: 1000, currency: "GTQ",
+            maintenanceFee: nil, maintenanceIncluded: false, deposit: nil,
+            locationSummary: "Zona 14",
+            neighborhood: nil, city: nil, state: nil, country: "Guatemala",
+            latitude: nil, longitude: nil,
+            isExactLocationShareable: false,
+            bedrooms: 1, bathrooms: 1, parkingSpaces: 0, areaSquareMeters: 50,
+            amenities: [], includedAppliances: [], requirements: [],
+            petPolicy: .notAllowed, visitInstructions: nil, quickReplyTemplates: [],
+            isFavorite: false, lastVerifiedAt: nil, createdAt: Date(), updatedAt: Date()
+        )
+        p.publicLocationLabel = "Zona 14, Guatemala"
+        let kp = KeyboardSafeProperty(projecting: p)
+        #expect(kp.wazeURL?.contains("waze.com/ul?q=") == true)
+    }
+}
+
+// MARK: - Sanitization tests
+
+@Suite("ListingSanitizationExtended")
+struct ListingSanitizationExtendedTests {
+
+    @Test("sanitize removes CTA lines")
+    func testCTALinesRemoved() async throws {
+        let text = """
+        Hermosa casa en venta.
+        Contáctanos para más información.
+        Agenda tu visita hoy.
+        3 recámaras disponibles.
+        """
+        let draft = try await LocalListingParser().parse(text)
+        let sanitized = draft.publicListingText.value ?? ""
+        #expect(!sanitized.lowercased().contains("contáctanos"))
+        #expect(!sanitized.lowercased().contains("agenda tu visita"))
+        #expect(sanitized.contains("3 recámaras"))
+    }
+
+    @Test("sanitize removes inline hashtags but keeps line content")
+    func testInlineHashtagsRemoved() async throws {
+        let text = """
+        Hermoso apartamento en renta. #InmuebleNuevo
+        Precio Q 4,500 mensuales. #Guatemala #ZonaViva
+        """
+        let draft = try await LocalListingParser().parse(text)
+        let sanitized = draft.publicListingText.value ?? ""
+        #expect(!sanitized.contains("#InmuebleNuevo"))
+        #expect(!sanitized.contains("#Guatemala"))
+        #expect(sanitized.contains("Hermoso apartamento en renta"))
+    }
+}
+
+// MARK: - Defect 1 regression — display title never uses garbage location strings
+
+@Suite("DisplayTitleRegression")
+struct DisplayTitleRegressionTests {
+
+    private func canonical(
+        propertyType: PropertyType = .house,
+        operation: OperationType = .sale,
+        developmentName: String? = nil,
+        neighborhoodName: String? = nil,
+        publicLocationLabel: String? = nil,
+        locationSummary: String = "Zona 10"
+    ) -> String {
+        Property.buildCanonicalTitle(
+            propertyType: propertyType, operationType: operation,
+            developmentName: developmentName, neighborhoodName: neighborhoodName,
+            publicLocationLabel: publicLocationLabel, locationSummary: locationSummary
+        )
+    }
+
+    @Test("Price line in locationSummary is excluded from canonical title")
+    func testPriceLineRejected() {
+        let title = canonical(locationSummary: "Precio de venta: Q900,000")
+        #expect(!title.contains("Precio"))
+        #expect(!title.contains("Q900,000"))
+        #expect(title == "Casa en venta")
+    }
+
+    @Test("Field label 'Ubicación:' never appears as location component")
+    func testFieldLabelRejected() {
+        let title = canonical(propertyType: .other, locationSummary: "Ubicación:")
+        #expect(!title.contains("Ubicación:"))
+        #expect(title == "Propiedad pendiente de revisión")
+    }
+
+    @Test("'Renta En' operation phrase never appears as location component")
+    func testOperationPhraseRejected() {
+        let title = canonical(propertyType: .other, locationSummary: "Renta En")
+        #expect(!title.lowercased().contains("renta en"))
+        #expect(title == "Propiedad pendiente de revisión")
+    }
+
+    @Test("Fallback is pending-review string (internal code shown in subtitle row)")
+    func testFallbackNeverContainsCode() {
+        let title = canonical(propertyType: .other, locationSummary: "precio de venta: Q900,000")
+        #expect(title == "Propiedad pendiente de revisión")
+    }
+
+    @Test("Valid location passes through correctly")
+    func testValidLocationPassesThrough() {
+        let title = canonical(locationSummary: "Santa Catarina Pinula")
+        #expect(title == "Casa en venta · Santa Catarina Pinula")
+    }
+
+    @Test("Development name takes priority over garbage locationSummary")
+    func testDevelopmentNamePriority() {
+        let title = canonical(
+            developmentName: "Residenciales Arboretto",
+            locationSummary: "precio de venta: Q1,200,000"
+        )
+        #expect(title == "Casa en venta · Residenciales Arboretto")
+    }
+
+    @Test("isValidForCache is true for property with garbage locationSummary")
+    func testIsValidForCacheIncludesGarbageLocationProperty() {
+        var p = Property.new()
+        p.propertyType = .other
+        p.locationSummary = "Precio de venta: Q900,000"
+        p.price = 900_000
+        p.currency = "GTQ"
+        p.internalCode = "SUN-100"
+        #expect(p.isValidForCache == true)
+    }
+
+    @Test("isValidForCache is true even when price is zero")
+    func testIsValidForCacheIncludesZeroPriceProperty() {
+        var p = Property.new()
+        p.locationSummary = "Zona 10"
+        p.price = 0
+        p.currency = "GTQ"
+        p.internalCode = "SUN-020"
+        #expect(p.isValidForCache == true)
+    }
+
+    @Test("isValidForCache requires non-empty id and internalCode")
+    func testIsValidForCacheRequiresCodeAndId() {
+        var p = Property.new()
+        p.locationSummary = "Zona 10"
+        p.internalCode = ""
+        #expect(p.isValidForCache == false)
+    }
+
+    @Test("isValidForCache is true for clean property")
+    func testIsValidForCacheAcceptsCleanProperty() {
+        var p = Property.new()
+        p.locationSummary = "Zona 10"
+        p.price = 900_000
+        p.currency = "GTQ"
+        p.internalCode = "SUN-010"
+        #expect(p.isValidForCache == true)
+    }
+}
+
+// MARK: - Defect 3 regression — general message visibility defaults
+
+@Suite("GeneralMessageDefaults")
+struct GeneralMessageDefaultTests {
+
+    @Test("new() defaults isKeyboardVisible to true")
+    func testNewMessageDefaultsVisible() {
+        let msg = GeneralMessageTemplate.new()
+        #expect(msg.isKeyboardVisible == true)
+    }
+
+    @Test("new() defaults isEnabled to true")
+    func testNewMessageDefaultsEnabled() {
+        let msg = GeneralMessageTemplate.new()
+        #expect(msg.isEnabled == true)
+    }
+
+    @Test("Message with isEnabled=false is excluded from publish filter")
+    func testDisabledMessageExcluded() {
+        var msg = GeneralMessageTemplate.new()
+        msg.isEnabled = false
+        // Confirm the filter expression used in CatalogCacheService would exclude it.
+        let wouldPublish = msg.isEnabled && msg.isKeyboardVisible
+        #expect(wouldPublish == false)
+    }
+
+    @Test("Message with isKeyboardVisible=false is excluded from publish filter")
+    func testInvisibleMessageExcluded() {
+        var msg = GeneralMessageTemplate.new()
+        msg.isKeyboardVisible = false
+        let wouldPublish = msg.isEnabled && msg.isKeyboardVisible
+        #expect(wouldPublish == false)
+    }
+
+    @Test("Message with both enabled and visible passes publish filter")
+    func testEnabledAndVisibleMessageIncluded() {
+        let msg = GeneralMessageTemplate.new()
+        let wouldPublish = msg.isEnabled && msg.isKeyboardVisible
+        #expect(wouldPublish == true)
+    }
+}
+
+// MARK: - Defect 1 helper — isCleanLocationPart unit tests
+
+@Suite("IsCleanLocationPart")
+struct IsCleanLocationPartTests {
+
+    @Test("Accepts plain place names")
+    func testAcceptsPlaceName() {
+        #expect(Property.isCleanLocationPart("Zona 10") == true)
+        #expect(Property.isCleanLocationPart("Santa Catarina Pinula") == true)
+        #expect(Property.isCleanLocationPart("Residenciales Arboretto") == true)
+        #expect(Property.isCleanLocationPart("Antigua Guatemala") == true)
+    }
+
+    @Test("Rejects price-related strings")
+    func testRejectsPriceStrings() {
+        #expect(Property.isCleanLocationPart("Precio de venta: Q900,000") == false)
+        #expect(Property.isCleanLocationPart("Q. 5,000 mensuales") == false)
+        #expect(Property.isCleanLocationPart("GTQ 1,200,000") == false)
+    }
+
+    @Test("Rejects field label artifacts")
+    func testRejectsFieldLabels() {
+        #expect(Property.isCleanLocationPart("Ubicación:") == false)
+        #expect(Property.isCleanLocationPart("Ubicacion:") == false)
+    }
+
+    @Test("Rejects operation phrases as location")
+    func testRejectsOperationPhrases() {
+        #expect(Property.isCleanLocationPart("Renta En") == false)
+        #expect(Property.isCleanLocationPart("En Venta") == false)
+    }
+
+    @Test("Rejects strings shorter than 3 characters")
+    func testRejectsShortStrings() {
+        #expect(Property.isCleanLocationPart("Z1") == false)
+        #expect(Property.isCleanLocationPart("") == false)
+    }
+}
+
+// MARK: - Sync lifecycle — property appears in snapshot immediately
+
+@Suite("SyncLifecycle")
+struct SyncLifecycleTests {
+
+    private func makeRepo() -> LocalPropertyRepository {
+        let tmp = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString + ".json")
+        return LocalPropertyRepository(fileURL: tmp)
+    }
+
+    private func makeProperty(code: String = "SUN-020", price: Decimal = 5_000) -> Property {
+        var p = Property.new()
+        p.internalCode = code
+        p.price = price
+        p.currency = "GTQ"
+        p.locationSummary = "Zona 10"
+        p.operationType = .rent
+        p.propertyType = .house
+        p.status = .available
+        return p
+    }
+
+    @Test("Newly created property with valid code appears in snapshot properties array")
+    func testNewPropertyAppearsInSnapshot() async throws {
+        let repo = makeRepo()
+        let property = makeProperty(code: "SUN-020")
+        try await repo.save(property)
+
+        let tmpSnapshot = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString + ".json")
+        let cache = CatalogCacheService(snapshotURL: tmpSnapshot)
+        await cache.publish(repository: repo)
+
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let data = try Data(contentsOf: tmpSnapshot)
+        let snapshot = try decoder.decode(KeyboardCatalogSnapshot.self, from: data)
+
+        let codes = snapshot.properties.map { $0.internalCode }
+        #expect(codes.contains("SUN-020"))
+    }
+
+    @Test("Available property appears in snapshot (keyboard Disponibles tab)")
+    func testAvailablePropertyInSnapshot() async throws {
+        let repo = makeRepo()
+        var p = makeProperty(code: "SUN-021")
+        p.status = .available
+        try await repo.save(p)
+
+        let tmpSnapshot = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString + ".json")
+        let cache = CatalogCacheService(snapshotURL: tmpSnapshot)
+        await cache.publish(repository: repo)
+
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let data = try Data(contentsOf: tmpSnapshot)
+        let snapshot = try decoder.decode(KeyboardCatalogSnapshot.self, from: data)
+
+        let available = snapshot.properties.filter { $0.status == .available }
+        #expect(available.map { $0.internalCode }.contains("SUN-021"))
+    }
+
+    @Test("Property with price=0 is included in snapshot")
+    func testZeroPricePropertyIncluded() async throws {
+        let repo = makeRepo()
+        let p = makeProperty(code: "SUN-022", price: 0)
+        try await repo.save(p)
+
+        let tmpSnapshot = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString + ".json")
+        let cache = CatalogCacheService(snapshotURL: tmpSnapshot)
+        await cache.publish(repository: repo)
+
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let data = try Data(contentsOf: tmpSnapshot)
+        let snapshot = try decoder.decode(KeyboardCatalogSnapshot.self, from: data)
+
+        #expect(snapshot.properties.map { $0.internalCode }.contains("SUN-022"))
+    }
+
+    @Test("Property with garbage locationSummary is still included in snapshot")
+    func testGarbageLocationPropertyIncluded() async throws {
+        let repo = makeRepo()
+        var p = makeProperty(code: "SUN-023")
+        p.locationSummary = "Precio de venta: Q900,000"
+        try await repo.save(p)
+
+        let tmpSnapshot = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString + ".json")
+        let cache = CatalogCacheService(snapshotURL: tmpSnapshot)
+        await cache.publish(repository: repo)
+
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let data = try Data(contentsOf: tmpSnapshot)
+        let snapshot = try decoder.decode(KeyboardCatalogSnapshot.self, from: data)
+
+        #expect(snapshot.properties.map { $0.internalCode }.contains("SUN-023"))
+    }
+}
+
+// MARK: - Message sync — general messages coexist with properties in snapshot
+
+@Suite("MessageSyncLifecycle")
+struct MessageSyncLifecycleTests {
+
+    private func makeMsgRepo() -> LocalGeneralMessageRepository {
+        let tmp = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString + ".json")
+        return LocalGeneralMessageRepository(fileURL: tmp)
+    }
+
+    private func makePropRepo() -> LocalPropertyRepository {
+        let tmp = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString + ".json")
+        return LocalPropertyRepository(fileURL: tmp)
+    }
+
+    private func makeSnapshotURL() -> URL {
+        FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString + ".json")
+    }
+
+    private func decodeSnapshot(at url: URL) throws -> KeyboardCatalogSnapshot {
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let data = try Data(contentsOf: url)
+        return try decoder.decode(KeyboardCatalogSnapshot.self, from: data)
+    }
+
+    @Test("Creating Bienvenida message publishes it to snapshot")
+    func testBienvenidaPublished() async throws {
+        let propRepo = makePropRepo()
+        let msgRepo = makeMsgRepo()
+        var msg = GeneralMessageTemplate.new(category: .welcome)
+        msg.title = "Bienvenida"
+        msg.body = "Hola, bienvenido a Sunsets."
+        try await msgRepo.save(msg)
+
+        let url = makeSnapshotURL()
+        let cache = CatalogCacheService(snapshotURL: url)
+        await cache.publish(repository: propRepo, messageRepository: msgRepo)
+
+        let snapshot = try decodeSnapshot(at: url)
+        let titles = snapshot.generalMessages.map { $0.title }
+        #expect(titles.contains("Bienvenida"))
+    }
+
+    @Test("Editing a message body updates the keyboard snapshot")
+    func testEditingMessageUpdatesSnapshot() async throws {
+        let propRepo = makePropRepo()
+        let msgRepo = makeMsgRepo()
+        var msg = GeneralMessageTemplate.new(category: .welcome)
+        msg.title = "Bienvenida"
+        msg.body = "Versión 1"
+        try await msgRepo.save(msg)
+
+        let url = makeSnapshotURL()
+        let cache = CatalogCacheService(snapshotURL: url)
+        await cache.publish(repository: propRepo, messageRepository: msgRepo)
+
+        msg.body = "Versión 2"
+        try await msgRepo.save(msg)
+        await cache.publish(repository: propRepo, messageRepository: msgRepo)
+
+        let snapshot = try decodeSnapshot(at: url)
+        let updated = snapshot.generalMessages.first { $0.title == "Bienvenida" }
+        #expect(updated?.body == "Versión 2")
+    }
+
+    @Test("Disabling a message removes it from the keyboard snapshot")
+    func testDisabledMessageRemovedFromSnapshot() async throws {
+        let propRepo = makePropRepo()
+        let msgRepo = makeMsgRepo()
+        var msg = GeneralMessageTemplate.new(category: .qualification)
+        msg.title = "Filtro renta"
+        msg.body = "¿Cuántas personas vivirán?"
+        try await msgRepo.save(msg)
+
+        let url = makeSnapshotURL()
+        let cache = CatalogCacheService(snapshotURL: url)
+        await cache.publish(repository: propRepo, messageRepository: msgRepo)
+
+        let before = try decodeSnapshot(at: url)
+        #expect(before.generalMessages.map { $0.title }.contains("Filtro renta"))
+
+        // Disable the message
+        msg.isEnabled = false
+        try await msgRepo.save(msg)
+        await cache.publish(repository: propRepo, messageRepository: msgRepo)
+
+        let after = try decodeSnapshot(at: url)
+        #expect(!after.generalMessages.map { $0.title }.contains("Filtro renta"))
+    }
+
+    @Test("Re-enabling a message restores it to the keyboard snapshot")
+    func testReenablingMessageRestoresSnapshot() async throws {
+        let propRepo = makePropRepo()
+        let msgRepo = makeMsgRepo()
+        var msg = GeneralMessageTemplate.new(category: .qualification)
+        msg.title = "Filtro renta"
+        msg.body = "¿Cuántas personas vivirán?"
+        msg.isEnabled = false   // start disabled
+        try await msgRepo.save(msg)
+
+        let url = makeSnapshotURL()
+        let cache = CatalogCacheService(snapshotURL: url)
+        await cache.publish(repository: propRepo, messageRepository: msgRepo)
+
+        let before = try decodeSnapshot(at: url)
+        #expect(!before.generalMessages.map { $0.title }.contains("Filtro renta"))
+
+        // Re-enable
+        msg.isEnabled = true
+        try await msgRepo.save(msg)
+        await cache.publish(repository: propRepo, messageRepository: msgRepo)
+
+        let after = try decodeSnapshot(at: url)
+        #expect(after.generalMessages.map { $0.title }.contains("Filtro renta"))
+    }
+
+    @Test("Properties and messages coexist in the same decoded snapshot")
+    func testPropertiesAndMessagesCoexistInSnapshot() async throws {
+        let propRepo = makePropRepo()
+        let msgRepo = makeMsgRepo()
+
+        var prop = Property.new()
+        prop.internalCode = "SUN-020"
+        prop.title = "Casa Arboretto"
+        prop.price = 5000
+        prop.currency = "GTQ"
+        prop.locationSummary = "Zona 10"
+        try await propRepo.save(prop)
+
+        var msg = GeneralMessageTemplate.new(category: .welcome)
+        msg.title = "Bienvenida"
+        msg.body = "Hola, bienvenido."
+        try await msgRepo.save(msg)
+
+        let url = makeSnapshotURL()
+        let cache = CatalogCacheService(snapshotURL: url)
+        await cache.publish(repository: propRepo, messageRepository: msgRepo)
+
+        let snapshot = try decodeSnapshot(at: url)
+        #expect(snapshot.properties.map { $0.internalCode }.contains("SUN-020"))
+        #expect(snapshot.generalMessages.map { $0.title }.contains("Bienvenida"))
+    }
+
+    @Test("Publishing without messageRepository reuses stored repo, not wipe messages")
+    func testSubsequentPublishWithoutMsgRepoKeepsMessages() async throws {
+        let propRepo = makePropRepo()
+        let msgRepo = makeMsgRepo()
+
+        var msg = GeneralMessageTemplate.new(category: .welcome)
+        msg.title = "Bienvenida"
+        msg.body = "Hola."
+        try await msgRepo.save(msg)
+
+        let url = makeSnapshotURL()
+        let cache = CatalogCacheService(snapshotURL: url)
+
+        // First publish: passes messageRepository → stored internally
+        await cache.publish(repository: propRepo, messageRepository: msgRepo)
+
+        // Second publish: property-only (simulating CatalogViewModel.save()) — must still include messages
+        var prop = Property.new()
+        prop.internalCode = "SUN-020"
+        prop.title = "Test"
+        prop.price = 5000
+        prop.currency = "GTQ"
+        prop.locationSummary = "Zona 10"
+        try await propRepo.save(prop)
+        await cache.publish(repository: propRepo)   // no messageRepository
+
+        let snapshot = try decodeSnapshot(at: url)
+        #expect(snapshot.properties.map { $0.internalCode }.contains("SUN-020"))
+        #expect(snapshot.generalMessages.map { $0.title }.contains("Bienvenida"))
+    }
+}
+
+// MARK: - Rent default requirements tests
+
+@Suite("RentDefaultRequirements")
+struct RentDefaultRequirementsTests {
+
+    // MARK: - prepareForNew
+
+    @Test("New rent property receives default requirements")
+    func newRentGetsDefaults() async {
+        let vm = PropertyEditorViewModel()
+        // operationType defaults to .rent
+        await vm.prepareForNew()
+        let expected = DefaultContent.rentRequirements.joined(separator: "\n")
+        #expect(vm.requirementsText == expected)
+    }
+
+    @Test("New sale property does not receive rent defaults")
+    func newSaleSkipsDefaults() async {
+        let vm = PropertyEditorViewModel()
+        vm.operationType = .sale
+        await vm.prepareForNew()
+        #expect(vm.requirementsText.isEmpty)
+    }
+
+    @Test("New rent/sale property receives default requirements")
+    func newRentOrSaleGetsDefaults() async {
+        let vm = PropertyEditorViewModel()
+        vm.operationType = .rentOrSale
+        await vm.prepareForNew()
+        let expected = DefaultContent.rentRequirements.joined(separator: "\n")
+        #expect(vm.requirementsText == expected)
+    }
+
+    @Test("prepareForNew does not overwrite user-supplied requirements")
+    func prepareForNewPreservesExistingRequirements() async {
+        let vm = PropertyEditorViewModel()
+        vm.requirementsText = "Fiador bancario"
+        await vm.prepareForNew()
+        #expect(vm.requirementsText == "Fiador bancario")
+    }
+
+    // MARK: - load(from draft:)
+
+    @Test("Imported rent draft with no requirements receives defaults")
+    func importedRentDraftGetsDefaults() {
+        let vm = PropertyEditorViewModel()
+        var draft = PropertyDraft(id: UUID().uuidString, sourceDescription: "test", parserVersion: "1")
+        draft.operationType = DraftField(value: .rent)
+        // requirements not set in draft
+        vm.load(from: draft)
+        let expected = DefaultContent.rentRequirements.joined(separator: "\n")
+        #expect(vm.requirementsText == expected)
+    }
+
+    @Test("Imported rent draft with existing requirements is not overwritten")
+    func importedRentDraftPreservesRequirements() {
+        let vm = PropertyEditorViewModel()
+        var draft = PropertyDraft(id: UUID().uuidString, sourceDescription: "test", parserVersion: "1")
+        draft.operationType = DraftField(value: .rent)
+        draft.requirements = DraftField(value: ["Carta de trabajo", "Fiador"])
+        vm.load(from: draft)
+        #expect(vm.requirementsText == "Carta de trabajo\nFiador")
+    }
+
+    @Test("Imported sale draft does not receive rent defaults")
+    func importedSaleDraftSkipsDefaults() {
+        let vm = PropertyEditorViewModel()
+        var draft = PropertyDraft(id: UUID().uuidString, sourceDescription: "test", parserVersion: "1")
+        draft.operationType = DraftField(value: .sale)
+        vm.load(from: draft)
+        #expect(vm.requirementsText.isEmpty)
+    }
+
+    // MARK: - load(from property:) — edit path never prefills
+
+    @Test("Editing a rent property with empty requirements does not prefill defaults")
+    func editRentWithEmptyRequirementsKeepsEmpty() {
+        let vm = PropertyEditorViewModel()
+        var p = Property.new()
+        p.operationType = .rent
+        p.requirements = []
+        vm.load(from: p)
+        #expect(vm.requirementsText.isEmpty)
+    }
+
+    // MARK: - No duplication
+
+    @Test("Calling buildProperty twice does not duplicate requirements lines")
+    func buildTwiceDoesNotDuplicate() async {
+        let vm = PropertyEditorViewModel()
+        await vm.prepareForNew()
+        vm.locationSummary = "Zona 10"
+        vm.priceText = "5000"
+
+        let first = vm.buildProperty()
+        let second = vm.buildProperty()
+
+        let expectedCount = DefaultContent.rentRequirements.count
+        #expect(first?.requirements.count == expectedCount)
+        #expect(second?.requirements.count == expectedCount)
+    }
+
+    @Test("Default requirements count matches doc")
+    func defaultRequirementsCount() {
+        #expect(DefaultContent.rentRequirements.count == 10)
+    }
+}
+
+// MARK: - Sale financing default tests
+
+@Suite("SaleFinancingDefaults")
+struct SaleFinancingDefaultsTests {
+
+    // MARK: - applySaleFinancingDefaultsIfNeeded via prepareForNew
+
+    @Test("New sale property gets seller-financing defaults")
+    func newSaleGetsSellerFinancingDefaults() async {
+        let vm = PropertyEditorViewModel()
+        vm.operationType = .sale
+        await vm.prepareForNew()
+        #expect(vm.sellerFinancingStatus == .unavailable)
+        #expect(vm.bankFinancingAssistanceAvailable == true)
+    }
+
+    @Test("New sale property gets base financing note")
+    func newSaleGetsBaseNote() async {
+        let vm = PropertyEditorViewModel()
+        vm.operationType = .sale
+        await vm.prepareForNew()
+        #expect(vm.financingNotesText == DefaultContent.saleDefaultNote)
+    }
+
+    @Test("New rentOrSale property gets financing defaults")
+    func newRentOrSaleGetsDefaults() async {
+        let vm = PropertyEditorViewModel()
+        vm.operationType = .rentOrSale
+        await vm.prepareForNew()
+        #expect(vm.sellerFinancingStatus == .unavailable)
+        #expect(vm.bankFinancingAssistanceAvailable == true)
+        #expect(vm.financingNotesText == DefaultContent.saleDefaultNote)
+    }
+
+    @Test("New rent property does not get sale financing defaults")
+    func newRentSkipsSaleDefaults() async {
+        let vm = PropertyEditorViewModel()
+        // operationType defaults to .rent
+        await vm.prepareForNew()
+        #expect(vm.sellerFinancingStatus == .unknown)
+        #expect(vm.bankFinancingAssistanceAvailable == false)
+        #expect(vm.financingNotesText.isEmpty)
+    }
+
+    @Test("Custom financing notes are not overwritten for new sale property")
+    func customNotesPreservedForNewSale() {
+        let vm = PropertyEditorViewModel()
+        vm.operationType = .sale
+        vm.financingNotesText = "Nota del agente"
+        vm.applySaleFinancingDefaultsIfNeeded()
+        #expect(vm.financingNotesText == "Nota del agente")
+    }
+
+    @Test("Draft seller financing status is not overridden when already set")
+    func sellerFinancingFromDraftNotOverridden() {
+        let vm = PropertyEditorViewModel()
+        var draft = PropertyDraft(id: UUID().uuidString, sourceDescription: "test", parserVersion: "1")
+        draft.operationType = DraftField(value: .sale)
+        draft.sellerFinancingStatus = DraftField(value: .available)
+        vm.load(from: draft)
+        #expect(vm.sellerFinancingStatus == .available)
+    }
+
+    // MARK: - applySaleFinancingDefaultsIfNeeded via load(from draft:)
+
+    @Test("Imported sale draft gets base financing defaults")
+    func importedSaleDraftGetsDefaults() {
+        let vm = PropertyEditorViewModel()
+        var draft = PropertyDraft(id: UUID().uuidString, sourceDescription: "test", parserVersion: "1")
+        draft.operationType = DraftField(value: .sale)
+        vm.load(from: draft)
+        #expect(vm.sellerFinancingStatus == .unavailable)
+        #expect(vm.bankFinancingAssistanceAvailable == true)
+        #expect(vm.financingNotesText == DefaultContent.saleDefaultNote)
+    }
+
+    @Test("Imported sale draft with FHA eligible gets full note")
+    func importedSaleDraftFHAEligibleGetsFullNote() {
+        let vm = PropertyEditorViewModel()
+        var draft = PropertyDraft(id: UUID().uuidString, sourceDescription: "test", parserVersion: "1")
+        draft.operationType = DraftField(value: .sale)
+        draft.fhaEligibility = DraftField(value: .eligible)
+        vm.load(from: draft)
+        let expected = DefaultContent.saleDefaultNote + "\n\n" + DefaultContent.saleDefaultNoteFHAAppend
+        #expect(vm.financingNotesText == expected)
+        #expect(vm.fhaEligibility == .eligible)
+    }
+
+    @Test("Imported sale draft with non-eligible FHA does not append FHA note")
+    func importedSaleDraftNonEligibleFHANoAppend() {
+        let vm = PropertyEditorViewModel()
+        var draft = PropertyDraft(id: UUID().uuidString, sourceDescription: "test", parserVersion: "1")
+        draft.operationType = DraftField(value: .sale)
+        draft.fhaEligibility = DraftField(value: .notEligible)
+        vm.load(from: draft)
+        #expect(!vm.financingNotesText.contains(DefaultContent.saleDefaultNoteFHAAppend))
+        #expect(vm.financingNotesText == DefaultContent.saleDefaultNote)
+    }
+
+    @Test("Imported rent draft does not get sale financing defaults")
+    func importedRentDraftSkipsSaleDefaults() {
+        let vm = PropertyEditorViewModel()
+        var draft = PropertyDraft(id: UUID().uuidString, sourceDescription: "test", parserVersion: "1")
+        draft.operationType = DraftField(value: .rent)
+        vm.load(from: draft)
+        #expect(vm.sellerFinancingStatus == .unknown)
+        #expect(vm.financingNotesText.isEmpty)
+    }
+
+    // MARK: - Edit path never prefills
+
+    @Test("Editing existing sale property with no notes does not prefill")
+    func editSalePropertyDoesNotPrefill() {
+        let vm = PropertyEditorViewModel()
+        var p = Property.new()
+        p.operationType = .sale
+        vm.load(from: p)
+        #expect(vm.financingNotesText.isEmpty)
+        #expect(vm.sellerFinancingStatus == .unknown)
+        #expect(vm.bankFinancingAssistanceAvailable == false)
+    }
+
+    // MARK: - syncFHAFinancingNote (interactive editor changes)
+
+    @Test("Switching FHA to eligible appends FHA paragraph")
+    func fhaEligibleAppendsParagraph() async {
+        let vm = PropertyEditorViewModel()
+        vm.operationType = .sale
+        await vm.prepareForNew()
+        let prev = vm.fhaEligibility  // .unknown
+        vm.fhaEligibility = .eligible
+        vm.syncFHAFinancingNote(from: prev)
+        let expected = DefaultContent.saleDefaultNote + "\n\n" + DefaultContent.saleDefaultNoteFHAAppend
+        #expect(vm.financingNotesText == expected)
+    }
+
+    @Test("Switching FHA to eligible twice does not duplicate paragraph")
+    func fhaEligibleNoDuplicate() async {
+        let vm = PropertyEditorViewModel()
+        vm.operationType = .sale
+        await vm.prepareForNew()
+        vm.fhaEligibility = .eligible
+        vm.syncFHAFinancingNote(from: .unknown)
+        vm.syncFHAFinancingNote(from: .eligible)   // same value again
+        let count = vm.financingNotesText
+            .components(separatedBy: DefaultContent.saleDefaultNoteFHAAppend).count - 1
+        #expect(count == 1)
+    }
+
+    @Test("Switching FHA to ineligible removes auto-appended paragraph")
+    func fhaIneligibleRemovesParagraph() async {
+        let vm = PropertyEditorViewModel()
+        vm.operationType = .sale
+        await vm.prepareForNew()
+        vm.fhaEligibility = .eligible
+        vm.syncFHAFinancingNote(from: .unknown)
+        vm.fhaEligibility = .notEligible
+        vm.syncFHAFinancingNote(from: .eligible)
+        #expect(!vm.financingNotesText.contains(DefaultContent.saleDefaultNoteFHAAppend))
+        #expect(vm.financingNotesText == DefaultContent.saleDefaultNote)
+    }
+
+    @Test("Removing FHA paragraph preserves surrounding custom text")
+    func fhaRemovalPreservesCustomText() async {
+        let vm = PropertyEditorViewModel()
+        vm.operationType = .sale
+        await vm.prepareForNew()
+        vm.fhaEligibility = .eligible
+        vm.syncFHAFinancingNote(from: .unknown)
+        vm.financingNotesText += "\n\nNota adicional del agente"
+        vm.fhaEligibility = .notEligible
+        vm.syncFHAFinancingNote(from: .eligible)
+        #expect(!vm.financingNotesText.contains(DefaultContent.saleDefaultNoteFHAAppend))
+        #expect(vm.financingNotesText.contains(DefaultContent.saleDefaultNote))
+        #expect(vm.financingNotesText.contains("Nota adicional del agente"))
+    }
+
+    @Test("syncFHAFinancingNote is no-op for rent properties")
+    func fhaSyncNoOpForRent() async {
+        let vm = PropertyEditorViewModel()
+        // operationType defaults to .rent
+        await vm.prepareForNew()
+        vm.fhaEligibility = .eligible
+        vm.syncFHAFinancingNote(from: .unknown)
+        #expect(vm.financingNotesText.isEmpty)
+    }
+}
+
+// MARK: - Keyboard menu preferences tests
+
+@Suite("KeyboardMenuPreferences")
+struct KeyboardMenuPreferencesTests {
+
+    @Test("Default actions count is 13")
+    func defaultActionsCount() {
+        #expect(KeyboardMenuPreferencesService.defaultActions.count == 13)
+    }
+
+    @Test("Default enabled actions are welcome, generalInfo, location, requirements, qualification, purchaseInfo")
+    func defaultEnabledSet() {
+        let defaults = KeyboardMenuPreferencesService.defaultActions
+        let enabled = Set(defaults.filter { $0.isEnabled }.map { $0.id })
+        #expect(enabled == ["welcome", "generalInfo", "location", "requirements", "qualification", "purchaseInfo"])
+    }
+
+    @Test("availability, price, characteristics, amenities, petPolicy, visit, followUp are disabled by default")
+    func defaultDisabledSet() {
+        let defaults = KeyboardMenuPreferencesService.defaultActions
+        let disabled = defaults.filter { !$0.isEnabled }.map { $0.id }
+        #expect(disabled.contains("availability"))
+        #expect(disabled.contains("price"))
+        #expect(disabled.contains("characteristics"))
+        #expect(disabled.contains("amenities"))
+        #expect(disabled.contains("petPolicy"))
+        #expect(disabled.contains("visit"))
+        #expect(disabled.contains("followUp"))
+    }
+
+    @Test("requirements and qualification are rent-only by default")
+    func rentOnlyDefaults() {
+        let defaults = KeyboardMenuPreferencesService.defaultActions
+        let requirements = defaults.first { $0.id == "requirements" }
+        let qualification = defaults.first { $0.id == "qualification" }
+        #expect(requirements?.rentOnly == true)
+        #expect(requirements?.saleOnly == false)
+        #expect(qualification?.rentOnly == true)
+        #expect(qualification?.saleOnly == false)
+    }
+
+    @Test("purchaseInfo is sale-only by default")
+    func saleOnlyDefaults() {
+        let defaults = KeyboardMenuPreferencesService.defaultActions
+        let purchaseInfo = defaults.first { $0.id == "purchaseInfo" }
+        #expect(purchaseInfo?.rentOnly == false)
+        #expect(purchaseInfo?.saleOnly == true)
+    }
+
+    @Test("welcome, generalInfo, location are shown for all operation types")
+    func alwaysVisibleDefaults() {
+        let defaults = KeyboardMenuPreferencesService.defaultActions
+        for id in ["welcome", "generalInfo", "location"] {
+            let action = defaults.first { $0.id == id }
+            #expect(action?.rentOnly == false)
+            #expect(action?.saleOnly == false)
+        }
+    }
+
+    @Test("All action IDs are unique")
+    func actionIDsAreUnique() {
+        let ids = KeyboardMenuPreferencesService.defaultActions.map { $0.id }
+        #expect(Set(ids).count == ids.count)
+    }
+
+    @Test("Snapshot round-trips menu actions")
+    func snapshotMenuActionsRoundTrip() throws {
+        let actions = KeyboardMenuPreferencesService.defaultActions
+        let snapshot = KeyboardCatalogSnapshot(
+            schemaVersion: KeyboardCatalogSnapshot.currentSchemaVersion,
+            catalogVersion: 1,
+            generatedAt: Date(timeIntervalSinceReferenceDate: 800_000_000),
+            activePropertyID: nil,
+            properties: [],
+            generalMessages: [],
+            menuActions: actions
+        )
+        let encoder = JSONEncoder(); encoder.dateEncodingStrategy = .iso8601
+        let decoder = JSONDecoder(); decoder.dateDecodingStrategy = .iso8601
+        let data = try encoder.encode(snapshot)
+        let decoded = try decoder.decode(KeyboardCatalogSnapshot.self, from: data)
+        #expect(decoded.menuActions.count == actions.count)
+        #expect(decoded.menuActions.first?.id == "welcome")
+        #expect(decoded.menuActions.first { $0.id == "requirements" }?.rentOnly == true)
+        #expect(decoded.menuActions.first { $0.id == "purchaseInfo" }?.saleOnly == true)
+    }
+
+    @Test("Old snapshot without menuActions decodes with empty actions")
+    func backwardCompatDecoding() throws {
+        // Simulate a v2 snapshot JSON without the menuActions key
+        let json = """
+        {
+            "schemaVersion": 2,
+            "catalogVersion": 5,
+            "generatedAt": "2025-01-01T00:00:00Z",
+            "activePropertyID": null,
+            "properties": [],
+            "generalMessages": []
+        }
+        """
+        let decoder = JSONDecoder(); decoder.dateDecodingStrategy = .iso8601
+        let decoded = try decoder.decode(KeyboardCatalogSnapshot.self, from: Data(json.utf8))
+        #expect(decoded.menuActions.isEmpty)
+        #expect(decoded.catalogVersion == 5)
+    }
+
+    @Test("CatalogCacheService publishes default menu actions when no preferences provided")
+    func publishIncludesDefaultMenuActions() async throws {
+        let tmp = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString + ".json")
+        let propRepo = LocalPropertyRepository(fileURL:
+            FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".json"))
+        let cache = CatalogCacheService(snapshotURL: tmp)
+        await cache.publish(repository: propRepo)
+
+        let decoder = JSONDecoder(); decoder.dateDecodingStrategy = .iso8601
+        let data = try Data(contentsOf: tmp)
+        let snapshot = try decoder.decode(KeyboardCatalogSnapshot.self, from: data)
+        #expect(snapshot.menuActions.count == KeyboardMenuPreferencesService.defaultActions.count)
+        #expect(snapshot.menuActions.first { $0.id == "generalInfo" }?.isEnabled == true)
+        #expect(snapshot.menuActions.first { $0.id == "availability" }?.isEnabled == false)
+    }
+}
+
+// MARK: - Edit path regression tests
+
+@Suite("EditPathRegression")
+struct EditPathRegressionTests {
+
+    @Test("load(from:) preserves the property UUID in buildProperty output")
+    func editPreservesUUID() {
+        let vm = PropertyEditorViewModel()
+        let p = makeSampleProperty(id: "fixed-uuid-SUN-023", code: "SUN-023")
+        vm.load(from: p)
+        let built = vm.buildProperty()
+        #expect(built?.id == "fixed-uuid-SUN-023")
+    }
+
+    @Test("load(from:) preserves internalCode — no new code allocated")
+    func editPreservesInternalCode() {
+        let vm = PropertyEditorViewModel()
+        let p = makeSampleProperty(code: "SUN-023")
+        vm.load(from: p)
+        let built = vm.buildProperty()
+        #expect(built?.internalCode == "SUN-023")
+    }
+
+    @Test("load(from:) preserves user-set displayTitle verbatim")
+    func editPreservesDisplayTitle() {
+        let vm = PropertyEditorViewModel()
+        let p = makeSampleProperty(displayTitle: "Mi título personalizado")
+        vm.load(from: p)
+        let built = vm.buildProperty()
+        #expect(built?.displayTitle == "Mi título personalizado")
+    }
+
+    @Test("load(from:) preserves saved propertyType")
+    func editPreservesPropertyType() {
+        let vm = PropertyEditorViewModel()
+        var p = makeSampleProperty()
+        p.propertyType = .house
+        vm.load(from: p)
+        let built = vm.buildProperty()
+        #expect(built?.propertyType == .house)
+    }
+
+    @Test("applySaleFinancingDefaultsIfNeeded is a no-op after load(from:)")
+    func editBlocksSaleFinancingPrefill() {
+        let vm = PropertyEditorViewModel()
+        var p = makeSampleProperty(operation: .sale)
+        p.propertyType = .house
+        vm.load(from: p)
+        // Explicitly call the method — it must be blocked because existingId is set
+        vm.applySaleFinancingDefaultsIfNeeded()
+        #expect(vm.sellerFinancingStatus == .unknown)
+        #expect(vm.bankFinancingAssistanceAvailable == false)
+        #expect(vm.financingNotesText.isEmpty)
+    }
+
+    @Test("prepareForNew is a no-op after load(from:) — no new code allocated")
+    func editBlocksPrepareForNew() async {
+        let vm = PropertyEditorViewModel()
+        let p = makeSampleProperty(code: "SUN-023")
+        vm.load(from: p)
+        await vm.prepareForNew()  // must be blocked
+        #expect(vm.internalCode == "SUN-023")
+        let built = vm.buildProperty()
+        #expect(built?.id == p.id)
+    }
+
+    @Test("buildProperty displayTitle fallback uses type+location, not price or listing text")
+    func displayTitleFallbackExcludesPrice() {
+        let vm = PropertyEditorViewModel()
+        var p = makeSampleProperty(displayTitle: "", price: 9_500)
+        p.propertyType = .apartment
+        p.publicLocationLabel = "Zona 14"
+        vm.load(from: p)
+        let built = vm.buildProperty()
+        let title = built?.displayTitle ?? ""
+        #expect(!title.contains("9500"))
+        #expect(!title.contains("9,500"))
+        #expect(!title.contains("GTQ"))
+    }
+
+    @Test("buildProperty uses same UUID as input on repeated save")
+    func buildPropertyReturnsSameUUIDOnRepeatedSave() {
+        let vm = PropertyEditorViewModel()
+        let p = makeSampleProperty(id: "stable-id", code: "SUN-023")
+        vm.load(from: p)
+        let first = vm.buildProperty()
+        let second = vm.buildProperty()
+        #expect(first?.id == "stable-id")
+        #expect(second?.id == "stable-id")
     }
 }

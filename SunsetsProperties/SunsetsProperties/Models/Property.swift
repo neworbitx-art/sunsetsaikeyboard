@@ -5,9 +5,17 @@ struct Property: Identifiable, Codable, Equatable {
     // MARK: - Identity
     var id: String
     var internalCode: String
-    var title: String
+    var propertyType: PropertyType = .other
+    var developmentName: String? = nil
+    var neighborhoodName: String? = nil
+    var title: String = ""        // legacy mirror kept in JSON for backward compat; equals displayTitle on all new saves
+    var displayTitle: String = "" // stored, user-editable title; migration-computed or user-set
     var operationType: OperationType
     var status: PropertyStatus
+
+    // MARK: - Public content
+    var publicDescription: String? = nil       // short optional description (manually entered)
+    var publicListingText: String? = nil       // full sanitized listing text (set by importer)
 
     // MARK: - Price
     var price: Decimal
@@ -57,6 +65,12 @@ struct Property: Identifiable, Codable, Equatable {
     var fhaEligibility: FHAEligibility = .unknown
     var financingNotes: String? = nil
 
+    // MARK: - IUSI (sale only)
+    var iusiAmount: Decimal? = nil
+    var iusiFrequency: String? = nil
+    var iusiVerifiedAt: Date? = nil
+    var iusiNotes: String? = nil
+
     // MARK: - Templates
     var quickReplyTemplates: [QuickReplyTemplate]
 
@@ -67,12 +81,59 @@ struct Property: Identifiable, Codable, Equatable {
     var updatedAt: Date
 
     // MARK: - Validation
+
+    /// Returns true when the string is a plausible place name and not a parser artifact.
+    /// Used by migration and tests to filter location candidates before composing the canonical title.
+    static func isCleanLocationPart(_ s: String) -> Bool {
+        let t = s.trimmingCharacters(in: .whitespaces)
+        guard t.count >= 3 else { return false }
+        let lower = t.lowercased()
+        let badPhrases = [
+            "precio", "precio de venta", "precio de renta",
+            "ubicación:", "ubicacion:",
+            " q.", "q.", "gtq", "usd",
+            "http://", "https://", "www.",
+            "@",
+            "renta en", "en renta", "en venta", "venta en",
+            "contáctanos", "contactanos", "contáctenos", "contactenos",
+            "whatsapp", "teléfono", "telefono",
+            "información y citas", "informacion y citas",
+        ]
+        return !badPhrases.contains(where: { lower.contains($0) })
+    }
+
+    /// Computes the canonical display title from structured fields.
+    /// Used by the decoder for migration and by tests directly.
+    static func buildCanonicalTitle(
+        propertyType: PropertyType,
+        operationType: OperationType,
+        developmentName: String?,
+        neighborhoodName: String?,
+        publicLocationLabel: String?,
+        locationSummary: String
+    ) -> String {
+        let typeOp: String? = propertyType != .other
+            ? "\(propertyType.label) en \(operationType.titleWord)"
+            : nil
+        let locationCandidates: [String?] = [developmentName, neighborhoodName, publicLocationLabel, locationSummary]
+        let locationPart = locationCandidates
+            .compactMap { $0 }
+            .first { isCleanLocationPart($0) }
+        let parts = [typeOp, locationPart].compactMap { $0 }.filter { !$0.isEmpty }
+        return parts.isEmpty ? "Propiedad pendiente de revisión" : parts.joined(separator: " · ")
+    }
+
+    /// Diagnostic flag: true when the stored displayTitle is non-empty and is not the pending-review fallback.
+    var isValidDisplayTitle: Bool {
+        let t = displayTitle.trimmingCharacters(in: .whitespaces)
+        return !t.isEmpty && t != "Propiedad pendiente de revisión"
+    }
+
+    /// Every property with a non-empty id and internal code is included in the keyboard catalog.
+    /// Incomplete prices, locations, or titles use safe display fallbacks in the keyboard UI.
     var isValidForCache: Bool {
-        !title.trimmingCharacters(in: .whitespaces).isEmpty &&
-        !internalCode.trimmingCharacters(in: .whitespaces).isEmpty &&
-        !locationSummary.trimmingCharacters(in: .whitespaces).isEmpty &&
-        !currency.trimmingCharacters(in: .whitespaces).isEmpty &&
-        price > 0
+        !id.trimmingCharacters(in: .whitespaces).isEmpty &&
+        !internalCode.trimmingCharacters(in: .whitespaces).isEmpty
     }
 
     // MARK: - Factory
@@ -81,7 +142,6 @@ struct Property: Identifiable, Codable, Equatable {
         return Property(
             id: UUID().uuidString,
             internalCode: "",
-            title: "",
             operationType: .rent,
             status: .available,
             price: 0,
@@ -114,7 +174,8 @@ struct Property: Identifiable, Codable, Equatable {
 
     // MARK: - Coding keys (used by synthesised encode(to:) and the custom decode in the extension)
     enum CodingKeys: String, CodingKey {
-        case id, internalCode, title, operationType, status
+        case id, internalCode, propertyType, developmentName, neighborhoodName, title, displayTitle, operationType, status
+        case publicDescription, publicListingText
         case price, currency, maintenanceFee, maintenanceIncluded, deposit
         case locationSummary, publicLocationLabel
         case neighborhood, city, state, country
@@ -125,6 +186,7 @@ struct Property: Identifiable, Codable, Equatable {
         case amenities, includedAppliances, includedItems, excludedItems
         case requirements, petPolicy, visitInstructions
         case sellerFinancingStatus, bankFinancingAssistanceAvailable, fhaEligibility, financingNotes
+        case iusiAmount, iusiFrequency, iusiVerifiedAt, iusiNotes
         case quickReplyTemplates
         case isFavorite
         case lastVerifiedAt, createdAt, updatedAt
@@ -139,9 +201,14 @@ extension Property {
 
         id              = try c.decode(String.self, forKey: .id)
         internalCode    = try c.decode(String.self, forKey: .internalCode)
-        title           = try c.decode(String.self, forKey: .title)
+        propertyType    = try c.decodeIfPresent(PropertyType.self, forKey: .propertyType) ?? .other
+        developmentName = try c.decodeIfPresent(String.self, forKey: .developmentName)
+        neighborhoodName = try c.decodeIfPresent(String.self, forKey: .neighborhoodName)
+        title           = try c.decodeIfPresent(String.self, forKey: .title) ?? ""
         operationType   = try c.decode(OperationType.self, forKey: .operationType)
         status          = try c.decode(PropertyStatus.self, forKey: .status)
+        publicDescription   = try c.decodeIfPresent(String.self, forKey: .publicDescription)
+        publicListingText   = try c.decodeIfPresent(String.self, forKey: .publicListingText)
 
         price               = try c.decode(Decimal.self, forKey: .price)
         currency            = try c.decode(String.self, forKey: .currency)
@@ -195,11 +262,31 @@ extension Property {
         fhaEligibility                 = try c.decodeIfPresent(FHAEligibility.self, forKey: .fhaEligibility) ?? .unknown
         financingNotes                 = try c.decodeIfPresent(String.self, forKey: .financingNotes)
 
+        iusiAmount      = try c.decodeIfPresent(Decimal.self, forKey: .iusiAmount)
+        iusiFrequency   = try c.decodeIfPresent(String.self, forKey: .iusiFrequency)
+        iusiVerifiedAt  = try c.decodeIfPresent(Date.self, forKey: .iusiVerifiedAt)
+        iusiNotes       = try c.decodeIfPresent(String.self, forKey: .iusiNotes)
+
         quickReplyTemplates = try c.decodeIfPresent([QuickReplyTemplate].self, forKey: .quickReplyTemplates) ?? []
 
         isFavorite     = try c.decodeIfPresent(Bool.self, forKey: .isFavorite) ?? false
         lastVerifiedAt = try c.decodeIfPresent(Date.self, forKey: .lastVerifiedAt)
         createdAt      = try c.decode(Date.self, forKey: .createdAt)
         updatedAt      = try c.decode(Date.self, forKey: .updatedAt)
+
+        // Migration: if displayTitle key is present in JSON, use it as-is (including empty string,
+        // which preserves an explicit user clear). If key is absent (legacy JSON), compute from fields.
+        if c.contains(.displayTitle) {
+            displayTitle = (try c.decodeIfPresent(String.self, forKey: .displayTitle)) ?? ""
+        } else {
+            displayTitle = Property.buildCanonicalTitle(
+                propertyType: propertyType,
+                operationType: operationType,
+                developmentName: developmentName,
+                neighborhoodName: neighborhoodName,
+                publicLocationLabel: publicLocationLabel,
+                locationSummary: locationSummary
+            )
+        }
     }
 }

@@ -10,9 +10,11 @@ final class ActivePropertyViewModel {
     var errorMessage: String?
 
     private let repository: any PropertyRepository
+    private let cacheService: CatalogCacheService
 
-    init(repository: any PropertyRepository) {
+    init(repository: any PropertyRepository, cacheService: CatalogCacheService = CatalogCacheService()) {
         self.repository = repository
+        self.cacheService = cacheService
     }
 
     func load() async {
@@ -34,6 +36,7 @@ final class ActivePropertyViewModel {
         do {
             try await repository.setActiveId(property.id)
             activeProperty = property
+            await cacheService.publish(repository: repository)
         } catch {
             errorMessage = "No se pudo establecer la propiedad activa."
         }
@@ -43,6 +46,7 @@ final class ActivePropertyViewModel {
         do {
             try await repository.setActiveId(nil)
             activeProperty = nil
+            await cacheService.publish(repository: repository)
         } catch {
             errorMessage = "No se pudo limpiar la propiedad activa."
         }

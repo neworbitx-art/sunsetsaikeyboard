@@ -4,6 +4,7 @@ struct DraftReviewView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var vm: PropertyEditorViewModel
     @State private var showingConfirmDiscard = false
+    @State private var showingSaveErrorAlert = false
 
     let draft: PropertyDraft
     let onSave: (Property) -> Void
@@ -63,6 +64,11 @@ struct DraftReviewView: View {
                 Button("Descartar", role: .destructive) { dismiss() }
                 Button("Seguir editando", role: .cancel) {}
             }
+            .alert("No se puede guardar", isPresented: $showingSaveErrorAlert) {
+                Button("Entendido", role: .cancel) {}
+            } message: {
+                Text(vm.validationErrors.joined(separator: "\n"))
+            }
         }
         .task { await vm.prepareForNew() }
     }
@@ -102,8 +108,30 @@ struct DraftReviewView: View {
             } else {
                 LabeledContent("Código", value: vm.internalCode.isEmpty ? "—" : vm.internalCode)
             }
-            draftRow(label: "Título *", field: draft.title) {
-                TextField("Título *", text: $vm.title)
+            draftRow(label: "Tipo de propiedad", field: draft.propertyType) {
+                Picker("Tipo de propiedad", selection: $vm.propertyType) {
+                    ForEach(PropertyType.allCases) { t in Text(t.label).tag(t) }
+                }
+                .pickerStyle(.menu)
+            }
+            draftRow(label: "Texto de anuncio (Información general)", field: draft.publicListingText) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Texto sanitizado del anuncio. Se usará en la respuesta de Información general del teclado.")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                    TextEditor(text: $vm.publicListingText)
+                        .frame(minHeight: 120)
+                }
+            }
+            draftRow(label: "Descripción corta", field: draft.publicDescription) {
+                TextEditor(text: $vm.publicDescription)
+                    .frame(minHeight: 60)
+            }
+            draftRow(label: "Título", field: draft.title) {
+                TextField(
+                    vm.suggestedDisplayTitle.isEmpty ? "Título del anuncio" : vm.suggestedDisplayTitle,
+                    text: $vm.displayTitle
+                )
             }
         }
     }
@@ -316,7 +344,10 @@ struct DraftReviewView: View {
     // MARK: - Confirm
 
     private func confirmAndSave() {
-        guard let property = vm.buildProperty() else { return }
+        guard let property = vm.buildProperty() else {
+            showingSaveErrorAlert = true
+            return
+        }
         onSave(property)
         dismiss()
     }

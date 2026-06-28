@@ -1,9 +1,15 @@
 import SwiftUI
 
+// Each sheet opening gets a unique UUID so SwiftUI always creates a fresh PropertyEditorView,
+// guaranteeing the @State vm is reset and never carries state from a previous session.
+private struct EditorSession: Identifiable {
+    let id = UUID()
+    let property: Property?
+}
+
 struct CatalogView: View {
     @State private var viewModel: CatalogViewModel
-    @State private var showingEditor: Bool = false
-    @State private var editingProperty: Property?
+    @State private var editorSession: EditorSession? = nil
     @State private var propertyToDelete: Property?
     @State private var showDeleteConfirmation: Bool = false
     @State private var showingImport: Bool = false
@@ -42,17 +48,16 @@ struct CatalogView: View {
                     .accessibilityLabel("Importar anuncio")
 
                     Button {
-                        editingProperty = nil
-                        showingEditor = true
+                        editorSession = EditorSession(property: nil)
                     } label: {
                         Image(systemName: "plus")
                     }
                     .accessibilityLabel("Agregar propiedad")
                 }
             }
-            .sheet(isPresented: $showingEditor) {
+            .sheet(item: $editorSession) { session in
                 PropertyEditorView(
-                    property: editingProperty,
+                    property: session.property,
                     repository: repository,
                     onSave: { property in
                         Task { await viewModel.save(property) }
@@ -96,8 +101,7 @@ struct CatalogView: View {
                     PropertyDetailView(
                         property: property,
                         onEdit: { p in
-                            editingProperty = p
-                            showingEditor = true
+                            editorSession = EditorSession(property: p)
                         },
                         onFavoriteToggle: { p in
                             Task { await viewModel.toggleFavorite(p) }
@@ -114,8 +118,7 @@ struct CatalogView: View {
                         Label("Eliminar", systemImage: "trash")
                     }
                     Button {
-                        editingProperty = property
-                        showingEditor = true
+                        editorSession = EditorSession(property: property)
                     } label: {
                         Label("Editar", systemImage: "pencil")
                     }

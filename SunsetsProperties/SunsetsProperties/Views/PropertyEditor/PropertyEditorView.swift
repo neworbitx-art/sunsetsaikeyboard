@@ -4,6 +4,7 @@ struct PropertyEditorView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var vm: PropertyEditorViewModel
     @State private var showingLocationPicker = false
+    @State private var showingSaveErrorAlert = false
 
     let property: Property?
     let onSave: (Property) -> Void
@@ -30,6 +31,7 @@ struct PropertyEditorView: View {
                     financingSection
                 }
                 visitSection
+                publicDescriptionSection
 
                 if !vm.validationErrors.isEmpty {
                     Section("Errores") {
@@ -62,19 +64,31 @@ struct PropertyEditorView: View {
                     vm.longitude = lon
                     vm.formattedAddress = address
                     vm.locationSource = .mapPicker
-                    if vm.locationSummary.trimmingCharacters(in: .whitespaces).isEmpty,
-                       let address {
-                        vm.locationSummary = address
+                    // Always ensure locationSummary is populated after a map confirmation.
+                    // Prefer the reverse-geocoded address; fall back to coordinate string.
+                    if vm.locationSummary.trimmingCharacters(in: .whitespaces).isEmpty {
+                        vm.locationSummary = address ?? String(format: "%.5f, %.5f", lat, lon)
                     }
                 }
             }
+            .alert("No se puede guardar", isPresented: $showingSaveErrorAlert) {
+                Button("Entendido", role: .cancel) {}
+            } message: {
+                Text(vm.validationErrors.joined(separator: "\n"))
+            }
         }
-        .task {
+        .task(id: property?.id ?? "new") {
             if let p = property {
                 vm.load(from: p)
             } else {
                 await vm.prepareForNew()
             }
+        }
+        .onChange(of: vm.operationType) { _, _ in
+            vm.applySaleFinancingDefaultsIfNeeded()
+        }
+        .onChange(of: vm.fhaEligibility) { old, _ in
+            vm.syncFHAFinancingNote(from: old)
         }
     }
 
@@ -96,8 +110,16 @@ struct PropertyEditorView: View {
                 LabeledContent("Código", value: vm.internalCode.isEmpty ? "—" : vm.internalCode)
                     .accessibilityLabel("Código interno de propiedad")
             }
-            TextField("Título *", text: $vm.title)
-                .accessibilityLabel("Título de la propiedad")
+            Picker("Tipo de propiedad", selection: $vm.propertyType) {
+                ForEach(PropertyType.allCases) { type in
+                    Text(type.label).tag(type)
+                }
+            }
+            TextField(
+                vm.suggestedDisplayTitle.isEmpty ? "Título del anuncio" : vm.suggestedDisplayTitle,
+                text: $vm.displayTitle
+            )
+            .accessibilityLabel("Título del anuncio")
             Toggle("Favorita", isOn: $vm.isFavorite)
         }
     }
@@ -347,6 +369,39 @@ struct PropertyEditorView: View {
                     .frame(minHeight: 60)
                     .accessibilityLabel("Notas de financiamiento")
             }
+
+            // IUSI
+            LabeledContent("IUSI (monto)") {
+                TextField("Q 0.00", text: $vm.iusiAmountText)
+                    .keyboardType(.decimalPad)
+                    .multilineTextAlignment(.trailing)
+            }
+            LabeledContent("Frecuencia IUSI") {
+                TextField("anual / semestral…", text: $vm.iusiFrequencyText)
+                    .multilineTextAlignment(.trailing)
+            }
+            DatePicker(
+                "Verificado el",
+                selection: Binding(
+                    get: { vm.iusiVerifiedAt ?? Date() },
+                    set: { vm.iusiVerifiedAt = $0 }
+                ),
+                displayedComponents: .date
+            )
+            if vm.iusiVerifiedAt != nil {
+                Button("Quitar fecha de verificación", role: .destructive) {
+                    vm.iusiVerifiedAt = nil
+                }
+                .font(.callout)
+            }
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Notas IUSI (opcional)")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                TextEditor(text: $vm.iusiNotesText)
+                    .frame(minHeight: 60)
+                    .accessibilityLabel("Notas IUSI")
+            }
         }
     }
 
@@ -360,10 +415,33 @@ struct PropertyEditorView: View {
         }
     }
 
+    // MARK: - Public description
+
+    private var publicDescriptionSection: some View {
+        Group {
+            Section("Texto del anuncio (Información general)") {
+                TextEditor(text: $vm.publicListingText)
+                    .frame(minHeight: 150)
+                    .accessibilityLabel("Texto sanitizado del anuncio")
+                Text("Texto sanitizado importado del anuncio. Se usa como cuerpo principal de Información general en el teclado.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Section("Descripción corta (opcional)") {
+                TextEditor(text: $vm.publicDescription)
+                    .frame(minHeight: 80)
+                    .accessibilityLabel("Descripción corta de la propiedad")
+            }
+        }
+    }
+
     // MARK: - Save
 
     private func save() {
-        guard let built = vm.buildProperty() else { return }
+        guard let built = vm.buildProperty() else {
+            showingSaveErrorAlert = true
+            return
+        }
         onSave(built)
         dismiss()
     }
