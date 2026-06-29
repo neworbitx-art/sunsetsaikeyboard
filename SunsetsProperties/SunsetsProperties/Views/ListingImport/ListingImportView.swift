@@ -39,7 +39,7 @@ struct ListingImportView: View {
                     Button("Cancelar") { dismiss() }
                 }
             }
-            .sheet(isPresented: $showingDraftReview) {
+            .sheet(isPresented: $showingDraftReview, onDismiss: { vm.resetDraft() }) {
                 if let draft = vm.draft {
                     DraftReviewView(
                         draft: draft,

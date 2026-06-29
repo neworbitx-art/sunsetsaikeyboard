@@ -17,11 +17,21 @@ struct LocalListingParser: ListingImportService {
 
     func parse(_ description: String) async throws -> PropertyDraft {
         var draft = PropertyDraft(sourceDescription: description, parserVersion: Self.version)
-        let text = description
-        let lower = text.lowercased()
-        let lines = text.components(separatedBy: .newlines)
+        // Sanitize first: removes hashtags, contact footers, CTAs, company signatures
+        let sanitized = sanitize(description)
+        let lower = sanitized.lowercased()
+        let lines = sanitized.components(separatedBy: .newlines)
             .map { $0.trimmingCharacters(in: .whitespaces) }
             .filter { !$0.isEmpty }
+
+        // Store the full sanitized text as the public listing body (editable before save)
+        if !sanitized.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            draft.publicListingText = DraftField(
+                value: sanitized.trimmingCharacters(in: .whitespacesAndNewlines),
+                confidence: .medium,
+                warning: "Revise el texto sanitizado. Se usará en Información general del teclado."
+            )
+        }
 
         draft.operationType       = detectOperationType(lower)
         draft.price               = detectPrice(lower)
@@ -39,16 +49,100 @@ struct LocalListingParser: ListingImportService {
         draft.includedItems       = detectIncludedItems(lower, lines: lines)
         draft.excludedItems       = detectExcludedItems(lower, lines: lines)
         draft.visitInstructions   = detectVisitInstructions(lower, lines: lines)
-        draft.contactInfo         = detectContactInfo(text)
-        draft.hashtags            = detectHashtags(text)
-        draft.locationSummary       = detectLocation(text, lower: lower, lines: lines)
-        draft.title                 = detectTitle(lines, lower: lower,
-                                                  location: draft.locationSummary.value)
+        draft.contactInfo         = detectContactInfo(description)  // use original for phone
+        draft.hashtags            = detectHashtags(description)     // use original for hashtags
+        draft.locationSummary       = detectLocation(sanitized, lower: lower, lines: lines)
+        let detectedDev             = detectDevelopmentName(lines)
+        if let dev = detectedDev { draft.developmentName = DraftField(value: dev, confidence: .medium) }
+        // Property type: heading-first detection (prevents room names from overriding type)
+        draft.propertyType          = detectStructuredPropertyType(lower, lines: lines)
         draft.status                = DraftField(value: .available, confidence: .high)
         draft.fhaEligibility        = detectFHAEligibility(lower)
         draft.sellerFinancingStatus = detectSellerFinancing(lower)
 
         return draft
+    }
+
+    // MARK: - Sanitization
+
+    private func sanitize(_ text: String) -> String {
+        let lines = text.components(separatedBy: .newlines)
+        var result: [String] = []
+        for line in lines {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            let lower = trimmed.lowercased()
+            if isHashtagLine(trimmed) { continue }
+            if isContactFooterLine(lower) { continue }
+            if isCompanySignatureLine(lower) { continue }
+            if isCTALine(lower) { continue }
+            if isPhoneOnlyLine(trimmed) { continue }
+            if isEmailOnlyLine(trimmed) { continue }
+            // Strip inline hashtag tokens from lines that survive filtering
+            let cleaned = removeInlineHashtags(line)
+            // Skip the line if stripping left it empty
+            if cleaned.trimmingCharacters(in: .whitespaces).isEmpty { continue }
+            result.append(cleaned)
+        }
+        // Collapse 3+ consecutive blank lines into at most 2
+        let joined = result.joined(separator: "\n")
+        return joined.replacing(/\n{3,}/, with: "\n\n")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private func isHashtagLine(_ line: String) -> Bool {
+        let words = line.split(separator: " ")
+        guard !words.isEmpty else { return false }
+        let hashtagCount = words.filter { $0.hasPrefix("#") }.count
+        return hashtagCount >= 2 || (hashtagCount == 1 && words.count == 1)
+    }
+
+    private func isCTALine(_ lower: String) -> Bool {
+        let ctaKeywords = [
+            "información y citas", "informacion y citas",
+            "contáctanos", "contactanos", "contáctenos", "contactenos",
+            "agenda tu visita", "agenda una visita", "agenda su visita",
+            "escríbenos", "escribenos", "escríbeme", "escribeme",
+            "para más información", "para mas informacion",
+            "solicita tu visita", "coordina tu visita",
+            "agenda aquí", "agenda aqui"
+        ]
+        return ctaKeywords.contains(where: { lower.contains($0) })
+    }
+
+    private func isContactFooterLine(_ lower: String) -> Bool {
+        let contactKeywords = [
+            "contacto:", "tel:", "teléfono:", "telefono:",
+            "whatsapp:", "cel:", "celular:", "llámenos", "llamenos",
+            "llámanos", "llamanos", "para más info", "para informes"
+        ]
+        return contactKeywords.contains(where: { lower.contains($0) })
+    }
+
+    private func isCompanySignatureLine(_ lower: String) -> Bool {
+        let signatures = ["sunsets real estate", "sunsets properties", "sunsets propiedades",
+                          "by sunsets", "©"]
+        return signatures.contains(where: { lower.contains($0) })
+    }
+
+    private func isPhoneOnlyLine(_ text: String) -> Bool {
+        // A line composed only of a phone number (digits, spaces, hyphens, parentheses, +)
+        let stripped = text
+            .replacing(/^[\s📞☎️]+/, with: "")
+            .trimmingCharacters(in: .whitespaces)
+        guard !stripped.isEmpty else { return false }
+        return stripped.wholeMatch(of: /[\+\(]?[\d\s\-\(\)]{7,}/) != nil
+    }
+
+    private func isEmailOnlyLine(_ text: String) -> Bool {
+        let trimmed = text.trimmingCharacters(in: .whitespaces)
+        return trimmed.wholeMatch(of: /[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}/) != nil
+    }
+
+    private func removeInlineHashtags(_ text: String) -> String {
+        text.replacing(/#[A-Za-z\u{00C0}-\u{017E}][A-Za-z\u{00C0}-\u{017E}0-9_]*/,
+                       with: "")
+            .replacing(/[ \t]{2,}/, with: " ")
+            .trimmingCharacters(in: .whitespaces)
     }
 
     // MARK: - Operation type
@@ -204,12 +298,36 @@ struct LocalListingParser: ListingImportService {
     // MARK: - Bathrooms
 
     private func detectBathrooms(_ lower: String) -> DraftField<Double> {
-        let pattern = /(\d+(?:[.,]\d+)?)\s*(?:baños?|bathrooms?)/
-        if let match = lower.firstMatch(of: pattern) {
+        // "2 baños y medio" / "1 baño y medio" → N + 0.5
+        if let match = lower.firstMatch(of: /(\d+)\s*ba[ñn]os?\s+y\s+medio/),
+           let n = Double(match.output.1) {
+            return DraftField(value: n + 0.5, confidence: .high)
+        }
+        // "1/2 baño" / "medio baño" → 0.5
+        if lower.contains("1/2 baño") || lower.contains("1/2 bano") || lower.contains("medio baño") {
+            // Check if there's also a whole count before
+            if let match = lower.firstMatch(of: /(\d+)\s*ba[ñn]os?\s+y\s+(?:1\/2|medio)/),
+               let n = Double(match.output.1) {
+                return DraftField(value: n + 0.5, confidence: .high)
+            }
+            return DraftField(value: 0.5, confidence: .high)
+        }
+        // "2.5 baños" or "1,5 baños"
+        if let match = lower.firstMatch(of: /(\d+[.,]\d+)\s*ba[ñn]os?/) {
             let raw = String(match.output.1).replacingOccurrences(of: ",", with: ".")
-            if let d = Double(raw) {
+            if let d = Double(raw), d > 0 {
                 return DraftField(value: d, confidence: .high)
             }
+        }
+        // "3 baños"
+        if let match = lower.firstMatch(of: /(\d+)\s*ba[ñn]os?/),
+           let d = Double(match.output.1), d > 0 {
+            return DraftField(value: d, confidence: .high)
+        }
+        // English fallback
+        if let match = lower.firstMatch(of: /(\d+(?:\.\d+)?)\s*bathrooms?/),
+           let d = Double(match.output.1), d > 0 {
+            return DraftField(value: d, confidence: .medium)
         }
         return DraftField(confidence: .missing, warning: "No se detectó el número de baños.")
     }
@@ -289,11 +407,32 @@ struct LocalListingParser: ListingImportService {
         let items = extractSection(
             from: lines,
             headers: ["incluye", "✨ incluye", "incluye:", "se incluye:",
-                      "items incluidos:", "incluye adicionalmente:"],
+                      "items incluidos:", "incluye adicionalmente:",
+                      "se incluyen:", "viene incluido:", "incluidos:",
+                      "incluido:", "qué incluye"],
             stopWords: ["no incluye", "excluye", "amenidades", "requisitos",
                         "electrodomésticos", "precio", "informes"])
-        if items.isEmpty { return DraftField(confidence: .missing) }
-        return DraftField(value: items, confidence: .medium)
+        if !items.isEmpty {
+            // Expand any comma-separated entries captured as a single item
+            let expanded = items.flatMap { item -> [String] in
+                let parts = item.components(separatedBy: ",")
+                    .map { $0.trimmingCharacters(in: .whitespaces) }
+                    .filter { !$0.isEmpty }
+                return parts.count > 1 ? parts : [item]
+            }
+            return DraftField(value: expanded, confidence: .medium)
+        }
+
+        // Inline extraction: "Incluye: cortinas, estufa, horno"
+        if let match = lower.firstMatch(of: /incluye[:\s]+([^.]+)/) {
+            let list = String(match.output.1)
+                .components(separatedBy: CharacterSet(charactersIn: ",;"))
+                .map { $0.trimmingCharacters(in: .whitespaces) }
+                .filter { $0.count > 1 }
+            if !list.isEmpty { return DraftField(value: list, confidence: .medium) }
+        }
+
+        return DraftField(confidence: .missing)
     }
 
     // MARK: - Excluded items
@@ -368,17 +507,47 @@ struct LocalListingParser: ListingImportService {
             _ = strippedLower
         }
 
-        // Strategy 2: "TITLE - Location" pattern in first 3 lines
+        // Strategy 2: "TITLE – Location" or "TITLE - Location" pattern in first 3 lines
+        // Covers both en-dash (–) and hyphen (-) separators used in real-estate headings.
+        let headingSeparators = [" – ", " - "]
         for line in lines.prefix(3) {
-            let parts = line.components(separatedBy: " - ")
-            if parts.count >= 2 {
-                let candidate = parts[1].trimmingCharacters(in: .whitespaces)
-                let generics = ["renta", "venta", "alquiler", "disponible",
-                                "departamento", "casa", "apartamento"]
-                let clean = candidate.replacing(/#\w+/, with: "").trimmingCharacters(in: .whitespaces)
-                if !clean.isEmpty && !generics.contains(clean.lowercased()) && clean.count > 3 {
-                    return DraftField(value: clean, confidence: .medium,
-                                      warning: "Ubicación extraída del título. Verifique.")
+            for sep in headingSeparators {
+                let parts = line.components(separatedBy: sep)
+                if parts.count >= 2 {
+                    // Take the last segment as the location candidate
+                    let candidate = parts.last!.trimmingCharacters(in: .whitespaces)
+                    let generics = ["renta", "venta", "alquiler", "disponible",
+                                    "departamento", "casa", "apartamento"]
+                    let clean = candidate.replacing(/#\w+/, with: "").trimmingCharacters(in: .whitespaces)
+                    if !clean.isEmpty && !generics.contains(clean.lowercased()) &&
+                       clean.count > 3 && clean.count < 80 {
+                        return DraftField(value: clean, confidence: .medium,
+                                          warning: "Ubicación extraída del título. Verifique.")
+                    }
+                }
+            }
+        }
+
+        // Strategy 2.5: standalone location lines in lines 2–5 (e.g. "Santa Catarina Pinula, Guatemala")
+        let opWords: Set<String> = ["venta", "renta", "alquiler", "precio", "disponible",
+                                    "casa", "apartamento", "terreno", "local", "bodega"]
+        for line in lines.dropFirst().prefix(4) {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            guard !trimmed.isEmpty, trimmed.count >= 5, trimmed.count < 80 else { continue }
+            let lowerLine = trimmed.lowercased()
+            // Skip lines that start with a property-type or price keyword
+            guard !opWords.contains(where: { lowerLine.hasPrefix($0) }) else { continue }
+            guard !lowerLine.contains("precio") && !lowerLine.contains("q.") else { continue }
+            // Accept lines that look like "City, Country" or "Municipality, City"
+            let commaCount = trimmed.filter { $0 == "," }.count
+            if commaCount >= 1 {
+                let parts = trimmed.components(separatedBy: ",").map { $0.trimmingCharacters(in: .whitespaces) }
+                let isGeo = parts.allSatisfy {
+                    !$0.isEmpty && $0.count >= 3 && !$0.lowercased().contains("q.")
+                }
+                if isGeo {
+                    return DraftField(value: trimmed, confidence: .medium,
+                                      warning: "Ubicación extraída del encabezado. Verifique.")
                 }
             }
         }
@@ -387,14 +556,14 @@ struct LocalListingParser: ListingImportService {
         let keywordPatterns: [Regex<(Substring, Substring)>] = [
             /(?:ubicado en|localizado en)\s+([A-Za-záéíóúÁÉÍÓÚüÜñÑ, ]+)/,
             /zona\s+\d+\s+(?:de\s+)?([A-Za-záéíóúÁÉÍÓÚüÜñÑ ]+)/,
-            /en\s+(santa\s+catarina\s+[a-záéíóúüñ]+|antigua\s+guatemala|ciudad\s+de\s+guatemala|[A-Za-záéíóúÁÉÍÓÚüÜñÑ]{5,}(?:\s+[A-Za-záéíóúÁÉÍÓÚüÜñÑ]+)*)/
+            /en\s+(santa\s+catarina\s+[a-záéíóúüñ]+|antigua\s+guatemala|ciudad\s+de\s+guatemala)/
         ]
         for pattern in keywordPatterns {
             if let match = lower.firstMatch(of: pattern) {
                 let candidate = String(match.output.1)
                     .trimmingCharacters(in: .whitespaces)
                     .capitalized
-                if candidate.count > 3 {
+                if candidate.count > 3 && !opWords.contains(candidate.lowercased()) {
                     return DraftField(value: candidate, confidence: .low,
                                       warning: "Ubicación inferida. Verifique y corrija si es necesario.")
                 }
@@ -405,70 +574,132 @@ struct LocalListingParser: ListingImportService {
                           warning: "No se detectó la ubicación. Ingrese manualmente.")
     }
 
-    // MARK: - Title
-
-    private func detectTitle(_ lines: [String], lower: String, location: String?) -> DraftField<String> {
-        let propType = detectPropertyType(lower)
-
-        // Strategy 1: "TITLE - Location" → left side is development name
-        if let first = lines.first {
-            let parts = first.components(separatedBy: " - ")
-            if parts.count >= 2 {
-                let left = stripLeadingDecoration(parts[0]).trimmingCharacters(in: .whitespaces)
-                if !left.isEmpty && !isPromoPhrase(left) && left.count <= 40 {
-                    let type = propType ?? "Propiedad"
-                    return DraftField(value: "\(type) en \(left)", confidence: .medium,
-                                      warning: "Título generado. Verifique.")
-                }
-            }
-        }
-
-        // Strategy 2: detect development name from heading text
-        // "¡ ... ! DevelopmentName!" — text after last ! in first line
-        for line in lines.prefix(2) {
-            let stripped = stripLeadingDecoration(line)
-            let exclamParts = stripped.components(separatedBy: "!")
-            // Take last non-empty part
-            if let devCandidate = exclamParts.reversed()
-                .first(where: { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }) {
-                let dev = devCandidate.trimmingCharacters(in: .whitespacesAndNewlines)
-                if dev.count >= 3 && dev.count <= 40 && !isPromoPhrase(dev) &&
-                   !dev.lowercased().hasPrefix("agenda") {
-                    let type = propType ?? "Propiedad"
-                    return DraftField(value: "\(type) en \(dev)", confidence: .medium,
-                                      warning: "Título generado. Verifique.")
-                }
-            }
-        }
-
-        // Strategy 3: property type + known location
-        if let type = propType, let loc = location, !loc.isEmpty {
-            return DraftField(value: "\(type) en \(loc)", confidence: .low,
-                              warning: "Título generado de la ubicación detectada. Verifique.")
-        }
-
-        return DraftField(confidence: .missing,
-                          warning: "Ingrese el título de la propiedad.")
-    }
-
     // MARK: - Property type detection
 
-    private func detectPropertyType(_ lower: String) -> String? {
-        // Order matters: check more specific terms first
-        let map: [(String, String)] = [
-            ("townhouse",    "Townhouse"),
-            ("town house",   "Townhouse"),
-            ("apartamento",  "Apartamento"),
-            ("departamento", "Apartamento"),   // normalize
-            ("oficina",      "Oficina"),
-            ("local comercial", "Local"),
-            ("local",        "Local"),
-            ("terreno",      "Terreno"),
-            ("bodega",       "Bodega"),
-            ("casa",         "Casa"),
+    // Heading-first detection prevents room names ("Bodega") from overriding heading type.
+    // Priority order: explicit field → first 2 heading lines → first 5 lines → body (no warehouse)
+    private func detectStructuredPropertyType(_ fullLower: String, lines: [String]) -> DraftField<PropertyType> {
+        // P1: Explicit "Tipo de propiedad:" field anywhere in text
+        if let type = detectTypeFromExplicitField(fullLower) {
+            return DraftField(value: type, confidence: .high)
+        }
+
+        // P2: First 2 lines (title / heading) — any type including warehouse
+        let headingLines = Array(lines.prefix(2).map { $0.lowercased() })
+        if let type = detectTypeFromLines(headingLines, allowWarehouse: true) {
+            return DraftField(value: type, confidence: .high)
+        }
+
+        // P3: First 5 lines (opening paragraph) — still high-confidence
+        let openingLines = Array(lines.prefix(5).map { $0.lowercased() })
+        if let type = detectTypeFromLines(openingLines, allowWarehouse: true) {
+            return DraftField(value: type, confidence: .medium)
+        }
+
+        // P4: Full body text — warehouse only when heading explicitly says so
+        if let type = detectTypeFromBodyNoWarehouse(fullLower) {
+            return DraftField(value: type, confidence: .low,
+                              warning: "Tipo detectado del texto. Verifique.")
+        }
+
+        return DraftField(confidence: .missing)
+    }
+
+    private func detectTypeFromExplicitField(_ lower: String) -> PropertyType? {
+        if lower.contains("tipo de propiedad: bodega")          { return .warehouse }
+        if lower.contains("tipo de propiedad: casa")            { return .house }
+        if lower.contains("tipo de propiedad: apartamento")     { return .apartment }
+        if lower.contains("tipo de propiedad: departamento")    { return .apartment }
+        if lower.contains("tipo de propiedad: terreno")         { return .land }
+        if lower.contains("tipo de propiedad: oficina")         { return .office }
+        if lower.contains("tipo de propiedad: local comercial") { return .commercialUnit }
+        if lower.contains("tipo de propiedad: townhouse")       { return .townhouse }
+        if lower.contains("tipo de propiedad: condominio")      { return .condominium }
+        return nil
+    }
+
+    // Checks an ordered list of lines (already lowercased) for property type keywords.
+    // Warehouse only matched when allowWarehouse AND the line contains warehouse-specific phrases.
+    private func detectTypeFromLines(_ lines: [String], allowWarehouse: Bool) -> PropertyType? {
+        let warehouseTerms = ["bodega en venta", "bodega en renta", "nave industrial",
+                              "bodega industrial"]
+        let typeMap: [(String, PropertyType)] = [
+            ("townhouse",       .townhouse),
+            ("town house",      .townhouse),
+            ("apartamento",     .apartment),
+            ("departamento",    .apartment),
+            ("oficina",         .office),
+            ("local comercial", .commercialUnit),
+            ("terreno",         .land),
+            ("casa",            .house),
+            ("condominio",      .condominium),
         ]
-        for (keyword, label) in map where lower.contains(keyword) {
-            return label
+        for line in lines {
+            if allowWarehouse && warehouseTerms.contains(where: { line.contains($0) }) {
+                return .warehouse
+            }
+            for (keyword, type) in typeMap where line.contains(keyword) {
+                return type
+            }
+        }
+        return nil
+    }
+
+    // Body-text fallback — never classifies as warehouse from body alone,
+    // because "bodega" in body text typically denotes a storage room.
+    private func detectTypeFromBodyNoWarehouse(_ lower: String) -> PropertyType? {
+        let typeMap: [(String, PropertyType)] = [
+            ("townhouse",       .townhouse),
+            ("town house",      .townhouse),
+            ("apartamento",     .apartment),
+            ("departamento",    .apartment),
+            ("oficina",         .office),
+            ("local comercial", .commercialUnit),
+            ("terreno",         .land),
+            ("casa",            .house),
+            ("condominio",      .condominium),
+        ]
+        for (keyword, type) in typeMap where lower.contains(keyword) {
+            return type
+        }
+        return nil
+    }
+
+    // MARK: - Development name extraction
+
+    private func detectDevelopmentName(_ lines: [String]) -> String? {
+        // Split on common heading separators first so "Casa en venta | Residenciales Arboretto – Pinula"
+        // yields ["Casa en venta", "Residenciales Arboretto", "Pinula"] and we find "Residenciales Arboretto".
+        let prefixes = ["residencial", "residenciales", "torre ", "condominio ", "proyecto ",
+                        "edificio ", "club ", "villas ", "parque ", "cento"]
+        for line in lines.prefix(3) {
+            // Split by heading separators into segments
+            var segments = [line]
+            for sep in [" | ", " – ", " - ", " · "] {
+                segments = segments.flatMap { $0.components(separatedBy: sep) }
+            }
+            segments = segments.map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+
+            for segment in segments {
+                let lowerSeg = segment.lowercased()
+                for prefix in prefixes where lowerSeg.hasPrefix(prefix) || lowerSeg.contains(" \(prefix)") {
+                    let candidate = segment.trimmingCharacters(in: .whitespaces)
+                    if candidate.count >= 5 && candidate.count <= 60 {
+                        return candidate
+                    }
+                }
+                // Also extract the sub-string starting from the prefix position
+                for prefix in prefixes {
+                    if let range = lowerSeg.range(of: prefix) {
+                        let offset = lowerSeg.distance(from: lowerSeg.startIndex, to: range.lowerBound)
+                        let sub = String(segment[segment.index(segment.startIndex, offsetBy: offset)...])
+                            .trimmingCharacters(in: .whitespaces)
+                        if sub.count >= 5 && sub.count <= 60 {
+                            return sub
+                        }
+                    }
+                }
+            }
         }
         return nil
     }

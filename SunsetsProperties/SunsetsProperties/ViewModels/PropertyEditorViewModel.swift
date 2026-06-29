@@ -6,9 +6,12 @@ final class PropertyEditorViewModel {
 
     // MARK: - Identity (internalCode is auto-generated; private(set) prevents user editing)
     private(set) var internalCode: String = ""
-    var title: String = ""
+    var propertyType: PropertyType = .other
+    var displayTitle: String = ""
     var operationType: OperationType = .rent
     var status: PropertyStatus = .available
+    var publicDescription: String = ""
+    var publicListingText: String = ""
 
     // MARK: - Price
     var priceText: String = ""
@@ -30,6 +33,7 @@ final class PropertyEditorViewModel {
     var longitude: Double? = nil
     var formattedAddress: String? = nil
     var googleMapsURLText: String = ""
+    var wazeURLText: String = ""
     var locationSource: LocationSource = .manual
     var isExactLocationShareable: Bool = false
 
@@ -51,11 +55,26 @@ final class PropertyEditorViewModel {
     var visitInstructions: String = ""
     var isFavorite: Bool = false
 
+    /// Suggested display title auto-computed from type, operation, and public location label.
+    /// Used as the TextField placeholder and as a fallback when displayTitle is empty on save.
+    var suggestedDisplayTitle: String {
+        guard propertyType != .other else { return "" }
+        let typeOp = "\(propertyType.label) en \(operationType.titleWord)"
+        let loc = publicLocationLabelText.trimmingCharacters(in: .whitespaces)
+        return loc.isEmpty ? typeOp : "\(typeOp) · \(loc)"
+    }
+
     // MARK: - Financing (sale only)
     var sellerFinancingStatus: SellerFinancingStatus = .unknown
     var bankFinancingAssistanceAvailable: Bool = false
     var fhaEligibility: FHAEligibility = .unknown
     var financingNotesText: String = ""
+
+    // MARK: - IUSI (sale only)
+    var iusiAmountText: String = ""
+    var iusiFrequencyText: String = ""
+    var iusiVerifiedAt: Date? = nil
+    var iusiNotesText: String = ""
 
     // MARK: - State
     var validationErrors: [String] = []
@@ -80,11 +99,30 @@ final class PropertyEditorViewModel {
         } catch {
             internalCode = "SUN-???"
         }
+        applyRentRequirementsIfNeeded()
+        applySaleFinancingDefaultsIfNeeded()
     }
 
     // Used only by tests to inject a code without a real repository
     func setInternalCodeForTesting(_ code: String) {
         internalCode = code
+    }
+
+    /// Prefills `displayTitle` with a canonical suggestion when the field is empty.
+    /// Called by DraftReviewView right after `load(from:)` so the user sees an editable
+    /// starting point. Does nothing when `displayTitle` is already set or `propertyType`
+    /// is `.other` (unknown type → no meaningful suggestion).
+    func seedSuggestedDisplayTitle() {
+        guard displayTitle.trimmingCharacters(in: .whitespaces).isEmpty else { return }
+        guard propertyType != .other else { return }
+        displayTitle = Property.buildCanonicalTitle(
+            propertyType: propertyType,
+            operationType: operationType,
+            developmentName: nil,
+            neighborhoodName: nil,
+            publicLocationLabel: nilIfEmpty(publicLocationLabelText),
+            locationSummary: locationSummary
+        )
     }
 
     // MARK: - Load from Property
@@ -93,9 +131,12 @@ final class PropertyEditorViewModel {
         existingId = property.id
         createdAt = property.createdAt
         internalCode = property.internalCode
-        title = property.title
+        propertyType = property.propertyType
+        displayTitle = property.displayTitle
         operationType = property.operationType
         status = property.status
+        publicDescription   = property.publicDescription ?? ""
+        publicListingText   = property.publicListingText ?? ""
 
         priceText = property.price == 0 ? "" : plainDecimal(property.price)
         currency = property.currency
@@ -113,6 +154,7 @@ final class PropertyEditorViewModel {
         longitude = property.longitude
         formattedAddress = property.formattedAddress
         googleMapsURLText = property.googleMapsURL ?? ""
+        wazeURLText = property.wazeURL ?? ""
         locationSource = property.locationSource
         isExactLocationShareable = property.isExactLocationShareable
 
@@ -136,12 +178,18 @@ final class PropertyEditorViewModel {
         bankFinancingAssistanceAvailable = property.bankFinancingAssistanceAvailable
         fhaEligibility = property.fhaEligibility
         financingNotesText = property.financingNotes ?? ""
+
+        iusiAmountText = property.iusiAmount.map { plainDecimal($0) } ?? ""
+        iusiFrequencyText = property.iusiFrequency ?? ""
+        iusiVerifiedAt = property.iusiVerifiedAt
+        iusiNotesText = property.iusiNotes ?? ""
     }
 
     // MARK: - Load from Draft
 
     func load(from draft: PropertyDraft) {
-        if let t = draft.title.value { title = t }
+        if let pt = draft.propertyType.value { propertyType = pt }
+        if let pl = draft.publicListingText.value   { publicListingText = pl }
         if let op = draft.operationType.value { operationType = op }
         if let st = draft.status.value { status = st }
         if let p = draft.price.value { priceText = plainDecimal(p) }
@@ -165,6 +213,8 @@ final class PropertyEditorViewModel {
         if let vis = draft.visitInstructions.value { visitInstructions = vis }
         if let fs = draft.sellerFinancingStatus.value { sellerFinancingStatus = fs }
         if let fha = draft.fhaEligibility.value { fhaEligibility = fha }
+        applyRentRequirementsIfNeeded()
+        applySaleFinancingDefaultsIfNeeded()
     }
 
     // MARK: - Validate
@@ -173,9 +223,6 @@ final class PropertyEditorViewModel {
     func validate() -> Bool {
         var errors: [String] = []
 
-        if title.trimmingCharacters(in: .whitespaces).isEmpty {
-            errors.append("El título es requerido.")
-        }
         if internalCode.trimmingCharacters(in: .whitespaces).isEmpty {
             errors.append("El código interno es requerido.")
         }
@@ -238,7 +285,7 @@ final class PropertyEditorViewModel {
             }
         }
 
-        // Generate maps URL from coordinates if none explicitly entered
+        // Generate Maps URL from coordinates if none explicitly entered
         let resolvedMapsURL: String?
         if !urlText.isEmpty {
             resolvedMapsURL = urlText
@@ -248,12 +295,39 @@ final class PropertyEditorViewModel {
             resolvedMapsURL = nil
         }
 
+        // Generate Waze URL: user-entered value → coordinate-based → label-search fallback
+        let resolvedWazeURL: String?
+        let wazeText = wazeURLText.trimmingCharacters(in: .whitespaces)
+        if !wazeText.isEmpty {
+            resolvedWazeURL = wazeText
+        } else if let lat, let lon {
+            resolvedWazeURL = String(format: "https://waze.com/ul?ll=%.6f,%.6f&navigate=yes", lat, lon)
+        } else {
+            let searchLabel = nilIfEmpty(publicLocationLabelText) ?? nilIfEmpty(locationSummary)
+            if let searchLabel,
+               let encoded = searchLabel.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
+               !encoded.isEmpty {
+                resolvedWazeURL = "https://waze.com/ul?q=\(encoded)"
+            } else {
+                resolvedWazeURL = nil
+            }
+        }
+
+        let effectiveDisplayTitle: String = {
+            let t = displayTitle.trimmingCharacters(in: .whitespaces)
+            return t.isEmpty ? suggestedDisplayTitle : t
+        }()
+
         return Property(
             id: existingId ?? UUID().uuidString,
             internalCode: internalCode.trimmingCharacters(in: .whitespaces),
-            title: title.trimmingCharacters(in: .whitespaces),
+            propertyType: propertyType,
+            title: effectiveDisplayTitle,
+            displayTitle: effectiveDisplayTitle,
             operationType: operationType,
             status: status,
+            publicDescription: nilIfEmpty(publicDescription),
+            publicListingText: nilIfEmpty(publicListingText),
             price: price,
             currency: currency.trimmingCharacters(in: .whitespaces).uppercased(),
             maintenanceFee: parseDecimal(maintenanceFeeText),
@@ -269,6 +343,7 @@ final class PropertyEditorViewModel {
             latitude: lat,
             longitude: lon,
             googleMapsURL: resolvedMapsURL,
+            wazeURL: resolvedWazeURL,
             locationSource: source,
             isExactLocationShareable: isExactLocationShareable,
             bedrooms: Int(bedroomsText) ?? 0,
@@ -288,12 +363,63 @@ final class PropertyEditorViewModel {
             bankFinancingAssistanceAvailable: bankFinancingAssistanceAvailable,
             fhaEligibility: fhaEligibility,
             financingNotes: nilIfEmpty(financingNotesText),
+            iusiAmount: parseDecimal(iusiAmountText),
+            iusiFrequency: nilIfEmpty(iusiFrequencyText),
+            iusiVerifiedAt: iusiVerifiedAt,
+            iusiNotes: nilIfEmpty(iusiNotesText),
             quickReplyTemplates: [],
             isFavorite: isFavorite,
             lastVerifiedAt: nil,
             createdAt: existingId != nil ? createdAt : now,
             updatedAt: now
         )
+    }
+
+    // MARK: - Default content
+
+    private func applyRentRequirementsIfNeeded() {
+        guard operationType == .rent || operationType == .rentOrSale else { return }
+        guard requirementsText.trimmingCharacters(in: .whitespaces).isEmpty else { return }
+        requirementsText = DefaultContent.rentRequirements.joined(separator: "\n")
+    }
+
+    // Prefills sale financing defaults for new and imported properties only.
+    // Guarded by existingId == nil so the edit path never triggers prefill.
+    func applySaleFinancingDefaultsIfNeeded() {
+        guard existingId == nil else { return }
+        guard operationType == .sale || operationType == .rentOrSale else { return }
+        if sellerFinancingStatus == .unknown { sellerFinancingStatus = .unavailable }
+        bankFinancingAssistanceAvailable = true
+        if financingNotesText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            financingNotesText = DefaultContent.saleDefaultNote
+        }
+        let fhaText = DefaultContent.saleDefaultNoteFHAAppend
+        if fhaEligibility == .eligible, !financingNotesText.contains(fhaText) {
+            let base = financingNotesText.trimmingCharacters(in: .whitespacesAndNewlines)
+            financingNotesText = base.isEmpty ? fhaText : base + "\n\n" + fhaText
+        }
+    }
+
+    // Called from the view's .onChange(of: vm.fhaEligibility) to keep the FHA paragraph
+    // in sync with the picker without touching any surrounding custom text.
+    func syncFHAFinancingNote(from previousEligibility: FHAEligibility) {
+        guard operationType == .sale || operationType == .rentOrSale else { return }
+        let fhaText = DefaultContent.saleDefaultNoteFHAAppend
+        if fhaEligibility == .eligible {
+            guard !financingNotesText.contains(fhaText) else { return }
+            let base = financingNotesText.trimmingCharacters(in: .whitespacesAndNewlines)
+            financingNotesText = base.isEmpty ? fhaText : base + "\n\n" + fhaText
+        } else if previousEligibility == .eligible {
+            var text = financingNotesText
+            if let range = text.range(of: "\n\n" + fhaText) {
+                text.removeSubrange(range)
+            } else if let range = text.range(of: fhaText + "\n\n") {
+                text.removeSubrange(range)
+            } else if let range = text.range(of: fhaText) {
+                text.removeSubrange(range)
+            }
+            financingNotesText = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
     }
 
     // MARK: - Helpers

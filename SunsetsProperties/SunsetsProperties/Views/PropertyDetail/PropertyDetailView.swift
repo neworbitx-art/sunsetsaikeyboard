@@ -5,6 +5,9 @@ struct PropertyDetailView: View {
     let onEdit: (Property) -> Void
     let onFavoriteToggle: (Property) -> Void
 
+    @Environment(\.openURL) private var openURL
+    @State private var badURLAlert = false
+
     var body: some View {
         List {
             headerSection
@@ -19,7 +22,12 @@ struct PropertyDetailView: View {
             metaSection
         }
         .listStyle(.insetGrouped)
-        .navigationTitle(property.title)
+        .alert("No se puede abrir el enlace", isPresented: $badURLAlert) {
+            Button("Entendido", role: .cancel) {}
+        } message: {
+            Text("La URL almacenada no es válida. Puede corregirla en el editor de propiedad.")
+        }
+        .navigationTitle(property.displayTitle.isEmpty ? property.internalCode : property.displayTitle)
         .navigationBarTitleDisplayMode(.large)
         .toolbar {
             ToolbarItemGroup(placement: .topBarTrailing) {
@@ -43,6 +51,8 @@ struct PropertyDetailView: View {
     private var headerSection: some View {
         Section {
             LabeledContent("Código", value: property.internalCode)
+            LabeledContent("Título", value: property.displayTitle.isEmpty ? "—" : property.displayTitle)
+            LabeledContent("Tipo", value: property.propertyType.label)
             LabeledContent("Operación", value: property.operationType.label)
             HStack {
                 Text("Estado")
@@ -56,6 +66,23 @@ struct PropertyDetailView: View {
                     Text("Esta propiedad no está disponible para confirmaciones de disponibilidad.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                }
+            }
+            if let listing = property.publicListingText, !listing.isEmpty {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Texto del anuncio")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Text(listing)
+                        .font(.callout)
+                }
+            } else if let desc = property.publicDescription, !desc.isEmpty {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Descripción pública")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Text(desc)
+                        .font(.callout)
                 }
             }
         }
@@ -93,9 +120,14 @@ struct PropertyDetailView: View {
                 LabeledContent("Coordenadas",
                                value: String(format: "%.5f, %.5f", lat, lon))
             }
-            if let mapsURL = property.googleMapsURL,
-               let url = URL(string: mapsURL) {
-                Link(destination: url) {
+            if let mapsURL = property.googleMapsURL, !mapsURL.isEmpty {
+                Button {
+                    if let url = URL(string: mapsURL) {
+                        openURL(url)
+                    } else {
+                        badURLAlert = true
+                    }
+                } label: {
                     Label("Abrir en Google Maps", systemImage: "map")
                 }
             }
@@ -192,6 +224,21 @@ struct PropertyDetailView: View {
                 Text(notes)
                     .font(.caption)
                     .foregroundStyle(.secondary)
+            }
+            if let iusiAmt = property.iusiAmount {
+                Divider()
+                LabeledContent("IUSI", value: AppFormatters.currency(iusiAmt, code: property.currency))
+                if let freq = property.iusiFrequency {
+                    LabeledContent("Frecuencia IUSI", value: freq)
+                }
+                if let verifiedAt = property.iusiVerifiedAt {
+                    LabeledContent("IUSI verificado", value: AppFormatters.date(verifiedAt))
+                }
+                if let notes = property.iusiNotes {
+                    Text(notes)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
         }
     }

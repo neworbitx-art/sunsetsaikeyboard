@@ -1,7 +1,7 @@
 # Project Status — Sunsets AI
 
 **Last updated:** 2026-06-27
-**Current milestone:** Milestone 2 — Local SunsetsAIKeyboard Extension (not started)
+**Current milestone:** Milestone 2 — Local SunsetsAIKeyboard Extension ✅ (awaiting approval — corrections applied)
 
 ---
 
@@ -121,11 +121,175 @@ Manually validated by Nox on 2026-06-27.
 
 ---
 
+### Milestone 2 — Local SunsetsAIKeyboard Extension ✅ (awaiting human approval, 2026-06-27)
+
+**Main app additions:**
+- [x] `Models/KeyboardSafeProperty.swift` — NEW (`KeyboardCatalogSnapshot` + `KeyboardSafeProperty` + projection from `Property`). Uses typed enums for main app target.
+- [x] `Models/Property.swift` — 4 IUSI fields added: `iusiAmount`, `iusiFrequency`, `iusiVerifiedAt`, `iusiNotes`
+- [x] `Models/QuickReplyTemplate.swift` — 3 new `TemplateCategory` cases: `.characteristics`, `.purchaseInfo`, `.followUp`
+- [x] `Services/CatalogCacheService.swift` — NEW. Writes `keyboard_catalog.json` to App Group container atomically. Publishes version/timestamp to App Group `UserDefaults`.
+- [x] `Services/TemplateEngine.swift` — NEW. Deterministic Spanish reply generator for all 10 categories. Typed-enum version for main app / tests.
+- [x] `Services/StorageMaintenanceService.swift` — NEW. `clearAllLocalData()`, `restoreDemoData()`, `removeStaleTempFiles()`, size reporting.
+- [x] `ViewModels/PropertyEditorViewModel.swift` — IUSI fields added.
+- [x] `ViewModels/CatalogViewModel.swift` — `CatalogCacheService` wired; default-parameter init preserves single-arg usage in tests.
+- [x] `ViewModels/ActivePropertyViewModel.swift` — `CatalogCacheService` wired; default-parameter init.
+- [x] `Views/Settings/SettingsView.swift` — Rewritten: catalog sync section (manual publish, last updated, version, size, count, error), keyboard setup 7-step guide, data management (clear + restore with confirmation), employee picker.
+- [x] `Views/PropertyEditor/PropertyEditorView.swift` — IUSI fields in financing section (sale only).
+- [x] `Views/PropertyDetail/PropertyDetailView.swift` — IUSI display in financing section (sale only).
+- [x] `Views/MainTabView.swift` — `CatalogCacheService` + `StorageMaintenanceService` threaded through.
+- [x] `SunsetsPropertiesApp.swift` — Creates `LocalPropertyRepository`, `CatalogCacheService`, `StorageMaintenanceService`; publishes cache on launch.
+
+**Keyboard extension (`SunsetsAIKeyboard/`):**
+- [x] `Models/KeyboardSafeProperty.swift` — NEW (string-typed enum fields; `KBQuickReplyTemplate`; independent from main app module).
+- [x] `Services/CatalogReader.swift` — NEW. Reads `keyboard_catalog.json` from App Group; stale detection (24 h); typed error messages.
+- [x] `Services/KeyboardPreferences.swift` — NEW. App Group `UserDefaults` for `keyboard_selected_property_id`, `recent_property_ids` (FIFO max 5), `active_property_id` (read-only), `current_employee`.
+- [x] `Services/TemplateEngine.swift` — NEW. String-enum version of deterministic Spanish replies. Same logic as main app.
+- [x] `Views/KeyboardRootView.swift` — NEW. 4-screen SwiftUI state machine: loading → error / noProperty / replies / selector / preview.
+- [x] `Views/PropertySelectorView.swift` — NEW. Favoritas / Recientes / Disponibles / No disponibles sections + search.
+- [x] `Views/ResponsePreviewView.swift` — NEW. Preview + Insert + Back.
+- [x] `KeyboardViewController.swift` — REWRITTEN. `UIHostingController<KeyboardRootView>` at 320 pt height; `textDocumentProxy.insertText()`; `advanceToNextInputMode()`.
+
+**Tests:**
+- [x] `SunsetsPropertiesTests/KeyboardCacheTests.swift` — NEW. 40 tests across 8 suites: projection (8), snapshot encoding (4), availability (5), price (6), location (3), pet policy (3), purchase info (6), characteristics (2), follow-up (3), general dispatcher (5), IUSI fields (3).
+- [x] All 157+ tests pass (unit). Build: `** BUILD SUCCEEDED **` for both targets.
+
+### Milestone 2 Refinement ✅ (awaiting human approval, 2026-06-27)
+
+**New models:**
+- [x] `Models/PropertyType.swift` — NEW. `PropertyType` enum (9 cases); `PropertyType.infer(from:)` utility.
+- [x] `Models/GeneralMessageTemplate.swift` — NEW. `GeneralMessageCategory` (7 cases), `GeneralMessageTemplate`, `KeyboardSafeGeneralMessage` (projection init included).
+- [x] `Models/Property.swift` — 4 new fields: `propertyType`, `developmentName`, `neighborhoodName`, `publicDescription`. Migration defaults in decoder. `displayTitle` computed property.
+- [x] `Models/PropertyDraft.swift` — 3 new draft fields: `propertyType`, `developmentName`, `publicDescription`.
+- [x] `Models/QuickReplyTemplate.swift` — `.generalInfo` case added (12th category).
+- [x] `Models/KeyboardSafeProperty.swift` (main app) — `propertyType`, `developmentName`, `displayTitle`, `publicDescription` added to struct and projection init. `generalMessages: [KeyboardSafeGeneralMessage]` added to `KeyboardCatalogSnapshot`.
+
+**New repositories and services:**
+- [x] `Repositories/GeneralMessageRepository.swift` — NEW. `GeneralMessageRepository` protocol + `LocalGeneralMessageRepository` (JSON file in Application Support, atomic writes).
+- [x] `Services/CatalogCacheService.swift` — `messageRepository` parameter added to `publish()`; only `isEnabled && isKeyboardVisible` messages projected.
+- [x] `Services/StorageMaintenanceService.swift` — `LocalGeneralMessageRepository` threaded in; `general_messages.json` removed on `clearAllLocalData()`.
+- [x] `Services/TemplateEngine.swift` (main app) — `generalInfo(for:)` method added (combined description + price + location + requirements).
+- [x] `Services/ListingImportService.swift` — Improved: input sanitized first (hashtag/footer/signature lines removed); `detectBathrooms` handles `medio baño`, `1/2 baño`, `N baños y medio`, decimal formats; `detectIncludedItems` splits comma-separated inline lists; `detectStructuredPropertyType` returns typed `PropertyType`; `detectDevelopmentName` extracts residencial/torre/etc. prefix; `detectPublicDescription` added.
+
+**New ViewModels and Views:**
+- [x] `ViewModels/GeneralMessagesViewModel.swift` — NEW. Load/save/delete/reorder; triggers cache sync after each mutation.
+- [x] `Views/GeneralMessages/GeneralMessagesView.swift` — NEW. Sortable list with category badges and keyboard-visibility icon.
+- [x] `Views/GeneralMessages/GeneralMessageEditorView.swift` — NEW. Create/edit sheet with all fields.
+- [x] `Views/MainTabView.swift` — "Mensajes" tab added (4th tab, text.bubble icon).
+- [x] `SunsetsPropertiesApp.swift` — `LocalGeneralMessageRepository` created at launch; passed to `MainTabView` and `CatalogCacheService`.
+- [x] `Views/PropertyEditor/PropertyEditorView.swift` — `propertyType` picker, `developmentName`, `neighborhoodName` fields; `displayTitle` preview row; `publicDescription` section.
+- [x] `Views/PropertyDetail/PropertyDetailView.swift` — `displayTitle`, `propertyType`, `developmentName`, `neighborhoodName`, `publicDescription` displayed in header section.
+- [x] `Views/ListingImport/DraftReviewView.swift` — `propertyType`, `developmentName`, `publicDescription` draft fields shown.
+
+**Keyboard extension updates:**
+- [x] `Models/KeyboardSafeProperty.swift` (keyboard) — `propertyType`, `developmentName`, `displayTitle`, `publicDescription` fields; `KBGeneralMessage` model with `categoryLabel`; `KeyboardCatalogSnapshot` updated to include `generalMessages`.
+- [x] `Services/TemplateEngine.swift` (keyboard) — `generalInfo(for:)` added as first category; `categories` array updated (11 categories including `generalInfo`).
+- [x] `Views/KeyboardRootView.swift` — `generalMessages` and `messagePreview` screen states; globe-bar button for messages when available; property header uses `displayTitle`; "Mensajes" button in no-property state.
+- [x] `Views/PropertySelectorView.swift` — Redesigned with tab bar: Todos / Disponibles / No disponibles / Favoritos / Recientes (with per-tab counts); search across `displayTitle`, code, location.
+- [x] `Views/GeneralMessagesKeyboardView.swift` — NEW. Browse and select from `KBGeneralMessage` list; review-before-insert indicator.
+
+**Tests:**
+- [x] 6 new test suites (32 tests): `BathroomParsingRefinement` (6), `ListingSanitization` (4), `PropertyTypeDetection` (4), `DevelopmentNameExtraction` (3), `IncludedItemsExtraction` (2), `GeneralInfoTemplate` (5), `DisplayTitle` (3), `GeneralMessageTemplate` (3) — plus existing `KeyboardCacheTests` snapshot fix.
+- [x] **196/196 tests pass.** Build: `** BUILD SUCCEEDED **`.
+
+### Milestone 2 Correction — 5 Blocking Defects ✅ (awaiting manual validation, 2026-06-27)
+
+Defects found during manual validation of Milestone 2 Refinement; corrected before approval.
+
+**DEFECT 1 — General Information used incomplete description:**
+- [x] `Property.swift` — `publicListingText: String?` field added; `CodingKeys` + decoder updated
+- [x] `PropertyDraft.swift` — `publicListingText: DraftField<String>` added
+- [x] `ListingImportService.swift` — `sanitize()` improved: removes CTA lines (`contáctanos`, `agenda tu visita`, `escríbenos`), phone-only lines, email-only lines, inline hashtag tokens; `publicListingText` DraftField populated with full sanitized text
+- [x] `TemplateEngine.swift` (main app) — `generalInfo()` rewritten: uses `publicListingText` as primary body; appends price/requirements only when absent from listing; appends Google Maps + Waze links when location approved
+- [x] `TemplateEngine.swift` (keyboard) — same rewrite; string-enum comparisons preserved
+- [x] `PropertyEditorViewModel.swift` — `publicListingText` field + load from Property and Draft + pass to `buildProperty()`
+- [x] `DraftReviewView.swift` — large editable TextEditor for `publicListingText` with confidence colour
+- [x] `PropertyEditorView.swift` — "Texto del anuncio" section; "Descripción corta" section retained
+
+**DEFECT 2 — General messages didn't synchronize to keyboard:**
+- [x] `KeyboardRootView.swift` — `reloadTrigger: Int` parameter; `.task(id: reloadTrigger)` replaces `.task`; `loadedVersion` state for version-change detection; `updateScreen(with:)` smart refresh; "Mensajes generales" button always visible (no conditional on count)
+- [x] `KeyboardViewController.swift` — `reloadCount` counter; `viewWillAppear` increments and calls `updateRootView()`; `makeRootView()` / `updateRootView()` helpers
+- [x] `GeneralMessagesKeyboardView.swift` — grouped by category with section headers; `categoryLabel(_:)` maps raw keys to Spanish; empty state when no messages
+
+**DEFECT 3 — Property type misclassified as Warehouse:**
+- [x] `ListingImportService.swift` — `detectStructuredPropertyType(_:lines:)`: 4-priority heading-first system; body text never triggers warehouse; warehouse requires explicit phrase (`bodega en venta`, `nave industrial`) in first 5 lines
+- [x] Regression fixture `ArborettoFixtureTests` added (6 tests)
+
+**DEFECT 4 — Generated title format included internal code:**
+- [x] `OperationType.swift` — `titleWord` computed property (`"renta"` / `"venta"` / `"renta o venta"`)
+- [x] `Property.swift` — `displayTitle` rewritten to `"<type> en <operation> · <development/neighborhood/location>"`; no internal code
+- [x] `PropertyEditorView.swift` — `buildDisplayTitle()` updated; shown when type ≠ `.other` or development name set (not requiring internal code)
+- [x] `DisplayTitleTests` updated (3 tests)
+
+**DEFECT 5 — Google Maps and Waze location links:**
+- [x] `KeyboardSafeProperty.swift` (main app) — `wazeURL: String?` added to struct and projection; coordinate-based when exact sharing approved; search-based from `publicLocationLabel` otherwise
+- [x] `KeyboardSafeProperty.swift` (keyboard) — `wazeURL: String?` added
+- [x] `TemplateEngine.swift` (main app + keyboard) — `buildMapsLinks()` helper; `location()` rewritten with `📍 Ubicación:` + Google Maps + Waze links
+- [x] `PropertyDetailView.swift` — shows `publicListingText` in header; falls back to `publicDescription`
+
+**Schema change (backward-compatible):**
+- [x] `KeyboardCatalogSnapshot.currentSchemaVersion` bumped 1 → 2 (new optional fields decode as nil from old snapshots)
+
+**Tests:**
+- [x] `schemaVersionIsCurrentVersion` updated to `== 2`
+- [x] `GeneralInfoTemplateTests` expanded (9 tests total — publicListingText, suppression, maps links)
+- [x] `ArborettoFixtureTests` — 6 regression tests (type, dev name, operation, location, CTA removal, displayTitle)
+- [x] `WazeURLTests` — 2 tests (coordinate-based, search-based)
+- [x] `ListingSanitizationExtendedTests` — 2 tests (CTA removal, inline hashtag stripping)
+- [x] Location detection: Strategy 2.5 added (standalone comma-separated place-name lines in lines 2–5)
+- [x] **209/209 tests pass.** Build: `** BUILD SUCCEEDED **`.
+
+### Milestone 2 Correction (Round 3) — 3 Synchronization Defects ✅ (awaiting manual validation, 2026-06-27)
+
+**DEFECT 1 — SUN-020 absent from keyboard (isValidForCache too strict):**
+- [x] `Models/Property.swift` — `isValidForCache` now requires only `!id.isEmpty && !internalCode.isEmpty`. Price, currency, locationSummary, and displayTitle are no longer exclusion criteria. Keyboard uses safe fallbacks for incomplete data. `isValidDisplayTitle` retained as diagnostic-only flag.
+- [x] `Models/Property.swift` — `displayTitle` fallback changed from `"Propiedad sin título · SUN-###"` to `"Propiedad pendiente de revisión"` (code shown separately in keyboard subtitle row, not embedded in title string).
+- [x] `Services/CatalogCacheService.swift` — Added `init(snapshotURL: URL? = nil)` for testable path bypassing App Group. `atomicWrite` fixed: uses `moveItem` when target doesn't yet exist (was silently discarding the write).
+
+**DEFECT 2 — General messages wiped on every property save (messageRepository not stored):**
+- [x] `Services/CatalogCacheService.swift` — `publish(repository:messageRepository:)` now stores `messageRepository` in `_messageRepository` when non-nil. Subsequent calls that omit `messageRepository` (CatalogViewModel, ActivePropertyViewModel, SettingsView) use the stored reference. General messages are never wiped by property operations.
+
+**DEFECT 3 — Keyboard property row shows no internal code:**
+- [x] `SunsetsAIKeyboard/Views/PropertySelectorView.swift` — `propertyRow` subtitle changed from `displayLocation` to `"\(internalCode) · \(displayLocation)"` (e.g. `SUN-020 · Zona 10`).
+- [x] `SunsetsAIKeyboard/Views/KeyboardRootView.swift` — `propertyHeader` now shows `displayTitle` (medium weight) + `"\(internalCode) · \(displayLocation)"` (caption2, secondary) for the active property.
+
+**Diagnostics (SettingsView):**
+- [x] `Views/Settings/SettingsView.swift` — Catalog sync section now shows: total properties, published count, excluded count (when > 0), published internal codes, total messages, published messages, App Group availability.
+- [x] `Services/CatalogCacheService.swift` — New tracking properties: `totalPropertyCount`, `totalMessageCount`, `publishedMessageCount`, `publishedInternalCodes`, `appGroupAvailable`.
+
+**Tests:**
+- [x] `DisplayTitleRegressionTests` updated: fallback text is now `"Propiedad pendiente de revisión"`; `isValidForCache` tests inverted (garbage location/price-zero properties are NOW included).
+- [x] `SyncLifecycle` suite (4 tests): SUN-020 appears; available status correct; zero-price included; garbage location included.
+- [x] `MessageSyncLifecycle` suite (6 tests): Bienvenida published; edit updates; disable removes; re-enable restores; properties+messages coexist; subsequent property-only publish keeps messages.
+- [x] **239/239 tests pass.** Build: `** BUILD SUCCEEDED **`.
+
+### Milestone 2 Correction (Round 2) — 4 Additional Blocking Defects ✅ (awaiting manual validation, 2026-06-27)
+
+Defects found during continued manual validation of Milestone 2 (post-correction). Fixed before re-approval.
+
+**DEFECT 1 — Correct property titles:**
+- [x] `Models/Property.swift` — `isCleanLocationPart(_:)` static helper: rejects price lines, field labels, operation phrases, URLs, contact keywords; `displayTitle` walks priority chain and skips garbage candidates; falls back to `"Propiedad sin título · <code>"` when `propertyType = .other` and no clean location exists; `isValidDisplayTitle: Bool` computed property; `isValidForCache` updated to require `isValidDisplayTitle`.
+- [x] Regression tests added (`IsCleanLocationPart` suite — 5 tests; `DisplayTitleRegression` suite — 8 tests).
+
+**DEFECT 2 — Save button fails after editing location:**
+- [x] `Views/PropertyEditor/PropertyEditorView.swift` — `@State private var showingSaveErrorAlert`. `save()` sets the flag on validation failure instead of silently returning. `LocationPickerView.onConfirm` now falls back to coordinate string `"%.5f, %.5f"` when reverse-geocoding returns nil — prevents empty `locationSummary` blocking save invisibly. `.alert("No se puede guardar")` shows full validation error list.
+- [x] `Views/ListingImport/DraftReviewView.swift` — same alert flag and `confirmAndSave()` wired to show alert on failure.
+
+**DEFECT 3 — General messages not reaching keyboard:**
+- [x] `Models/GeneralMessageTemplate.swift` — `new()` default changed `isKeyboardVisible: false` → `isKeyboardVisible: true`. New messages now reach the keyboard immediately without requiring a manual toggle.
+- [x] `GeneralMessageTemplateTests.testNewTemplateDefaults()` updated to expect `true`.
+- [x] `GeneralMessageDefaults` suite added — 5 tests covering default, publish-filter logic.
+
+**DEFECT 4 — Invalid items in property catalog:**
+- [x] `Services/CatalogCacheService.swift` — `excludedPropertyCount: Int` added; `publish()` computes `valid = all.filter { $0.isValidForCache }`, tracks `excluded = all.count - valid.count`, sets `lastError` warning when `excluded > 0`, resets `excludedPropertyCount` in `clearCache()`.
+- [x] `Views/Settings/SettingsView.swift` — "Propiedades excluidas" row shown in orange when `excludedPropertyCount > 0`.
+
+**Tests:**
+- [x] `DisplayTitleRegression` suite — 8 tests (price line excluded, field label excluded, operation phrase excluded, fallback code, valid passthrough, dev name priority, `isValidForCache` false/true).
+- [x] `GeneralMessageDefaults` suite — 5 tests (default visible, default enabled, disabled excluded, invisible excluded, both included).
+- [x] `IsCleanLocationPart` suite — 5 tests (place names accepted; price/label/operation/short strings rejected).
+- [x] **227/227 tests pass.** Build: `** BUILD SUCCEEDED **`.
+
 ## Pending Work
-
-### Milestone 2 — Local SunsetsAIKeyboard Extension (Not started)
-
-Awaiting implementation start. Scope defined in `docs/MILESTONES.md`.
 
 ---
 
@@ -183,9 +347,9 @@ Awaiting implementation start. Scope defined in `docs/MILESTONES.md`.
 |----------|---------------|
 | iOS deployment target | iOS 17 minimum |
 | Primary device | iPhone only (iPad out of scope for MVP) |
-| Main app bundle ID | `com.sunsetsrealestate.sunsetsproperties` |
-| Keyboard extension bundle ID | `com.sunsetsrealestate.sunsetsproperties.keyboard` |
-| App Group identifier | `group.com.sunsetsrealestate.sunsetsai` |
+| Main app bundle ID | `com.zircondata.sunsetsproperties` |
+| Keyboard extension bundle ID | `com.zircondata.sunsetsproperties.keyboard` |
+| App Group identifier | `group.com.zircondata.sunsetsai` |
 | Primary language | Spanish for Guatemala (`es-GT`) |
 | Organization model | Single organization (Sunsets Real Estate) |
 | `assignedAgentId` in keyboard cache | Excluded |
@@ -232,4 +396,6 @@ Awaiting implementation start. Scope defined in `docs/MILESTONES.md`.
 
 ## Next Exact Task
 
-> **Implement Milestone 2 — Local SunsetsAIKeyboard and shared keyboard-safe property catalog.**
+> **Await explicit human approval of Milestone 2 (including all correction rounds) before beginning Milestone 3.**
+
+Milestone 2 base implementation, Milestone 2 Refinement, Correction round 1 (5 defects), Correction round 2 (4 defects), and Correction round 3 (3 synchronization defects) are fully implemented and tested (239/239 tests passing). Stop here per the Milestone Discipline rule in CLAUDE.md.

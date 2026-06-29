@@ -39,9 +39,11 @@ final class CatalogViewModel {
     var errorMessage: String?
 
     private let repository: any PropertyRepository
+    private let cacheService: CatalogCacheService
 
-    init(repository: any PropertyRepository) {
+    init(repository: any PropertyRepository, cacheService: CatalogCacheService = CatalogCacheService()) {
         self.repository = repository
+        self.cacheService = cacheService
     }
 
     var filteredProperties: [Property] {
@@ -62,7 +64,7 @@ final class CatalogViewModel {
         if !searchText.trimmingCharacters(in: .whitespaces).isEmpty {
             let query = searchText.lowercased().folding(options: .diacriticInsensitive, locale: .current)
             result = result.filter {
-                $0.title.lowercased().folding(options: .diacriticInsensitive, locale: .current).contains(query) ||
+                $0.displayTitle.lowercased().folding(options: .diacriticInsensitive, locale: .current).contains(query) ||
                 $0.internalCode.lowercased().contains(query) ||
                 $0.locationSummary.lowercased().folding(options: .diacriticInsensitive, locale: .current).contains(query)
             }
@@ -70,7 +72,7 @@ final class CatalogViewModel {
 
         return result.sorted {
             if $0.isFavorite != $1.isFavorite { return $0.isFavorite }
-            return $0.title.localizedCompare($1.title) == .orderedAscending
+            return $0.displayTitle.localizedCompare($1.displayTitle) == .orderedAscending
         }
     }
 
@@ -90,6 +92,7 @@ final class CatalogViewModel {
             updated.updatedAt = Date()
             try await repository.save(updated)
             await load()
+            await cacheService.publish(repository: repository)
         } catch {
             errorMessage = "No se pudo guardar la propiedad."
         }
@@ -99,6 +102,7 @@ final class CatalogViewModel {
         do {
             try await repository.delete(id: property.id)
             await load()
+            await cacheService.publish(repository: repository)
         } catch {
             errorMessage = "No se pudo eliminar la propiedad."
         }

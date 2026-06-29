@@ -6,7 +6,7 @@ struct PropertyRowView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(alignment: .firstTextBaseline) {
-                Text(property.title)
+                Text(property.displayTitle.isEmpty ? property.internalCode : property.displayTitle)
                     .font(.headline)
                     .foregroundStyle(.primary)
                     .lineLimit(1)
@@ -47,6 +47,6 @@ struct PropertyRowView: View {
     }
 
     private var accessibilityDescription: String {
-        "\(property.title), \(property.status.label), \(property.operationType.label), \(AppFormatters.currency(property.price, code: property.currency)), \(property.locationSummary)"
+        "\(property.displayTitle.isEmpty ? property.internalCode : property.displayTitle), \(property.status.label), \(property.operationType.label), \(AppFormatters.currency(property.price, code: property.currency)), \(property.locationSummary)"
     }
 }

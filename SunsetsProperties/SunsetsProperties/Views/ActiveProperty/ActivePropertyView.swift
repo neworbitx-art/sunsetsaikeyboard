@@ -77,7 +77,7 @@ struct ActivePropertyView: View {
                 VStack(alignment: .leading, spacing: 10) {
                     HStack {
                         VStack(alignment: .leading, spacing: 4) {
-                            Text(property.title)
+                            Text(property.displayTitle.isEmpty ? property.internalCode : property.displayTitle)
                                 .font(.title2.weight(.bold))
                             Text(property.internalCode)
                                 .font(.caption)
@@ -169,7 +169,7 @@ struct PropertySelectorView: View {
         if search.trimmingCharacters(in: .whitespaces).isEmpty { return properties }
         let q = search.lowercased().folding(options: .diacriticInsensitive, locale: .current)
         return properties.filter {
-            $0.title.lowercased().folding(options: .diacriticInsensitive, locale: .current).contains(q) ||
+            $0.displayTitle.lowercased().folding(options: .diacriticInsensitive, locale: .current).contains(q) ||
             $0.internalCode.lowercased().contains(q) ||
             $0.locationSummary.lowercased().folding(options: .diacriticInsensitive, locale: .current).contains(q)
         }

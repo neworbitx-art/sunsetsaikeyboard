@@ -44,7 +44,9 @@ struct PropertyDraft: Identifiable, Sendable {
     var parserVersion: String
     var createdAt: Date
 
-    var title: DraftField<String>
+    var propertyType: DraftField<PropertyType>
+    var developmentName: DraftField<String>
+    var publicListingText: DraftField<String>   // full sanitized listing body
     var operationType: DraftField<OperationType>
     var status: DraftField<PropertyStatus>
     var price: DraftField<Decimal>
@@ -76,7 +78,9 @@ struct PropertyDraft: Identifiable, Sendable {
         self.sourceDescription = sourceDescription
         self.parserVersion = parserVersion
         self.createdAt = Date()
-        self.title = DraftField()
+        self.propertyType = DraftField()
+        self.developmentName = DraftField()
+        self.publicListingText = DraftField()
         self.operationType = DraftField()
         self.status = DraftField()
         self.price = DraftField()

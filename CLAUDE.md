@@ -56,9 +56,9 @@ Read this file, then read `docs/PROJECT_STATUS.md`, before touching any other fi
 
 ## File and Configuration Rules
 
-- The App Group identifier is `group.com.sunsetsrealestate.sunsetsai`. Do not change it without approval.
-- The main application bundle identifier is `com.sunsetsrealestate.sunsetsproperties`. Do not change it without approval.
-- The keyboard extension bundle identifier is `com.sunsetsrealestate.sunsetsproperties.keyboard`. Do not change it without approval.
+- The App Group identifier is `group.com.zircondata.sunsetsai`. Do not change it without approval.
+- The main application bundle identifier is `com.zircondata.sunsetsproperties`. Do not change it without approval.
+- The keyboard extension bundle identifier is `com.zircondata.sunsetsproperties.keyboard`. Do not change it without approval.
 - Do not modify `*.xcodeproj`, `*.xcworkspace`, entitlements files, or `Info.plist` signing fields without prior explanation and approval.
 - Do not add, remove, or upgrade Swift Package Manager dependencies without explaining the reason first.
 
