@@ -49,6 +49,9 @@ enum TemplateEngine {
     }
 
     // MARK: - General information (combined)
+    // Scope: description, price, characteristics, amenities, included/excluded items.
+    // Deliberately excluded: location/map links, requirements, financing, visit
+    // instructions — those each have their own keyboard button.
 
     static func generalInfo(for property: KeyboardSafeProperty) -> String {
         var sections: [String] = []
@@ -57,75 +60,123 @@ enum TemplateEngine {
             sections.append("⚠️ Esta propiedad está \(property.statusLabel.lowercased()) y no está disponible actualmente.")
         }
 
-        // Primary body: full sanitized listing text (preferred over short description)
-        let listingLower: String
         if let listing = property.publicListingText,
            !listing.trimmingCharacters(in: .whitespaces).isEmpty {
-            sections.append(listing.trimmingCharacters(in: .whitespaces))
-            listingLower = listing.lowercased()
-        } else if let desc = property.publicDescription,
-                  !desc.trimmingCharacters(in: .whitespaces).isEmpty {
-            sections.append(desc.trimmingCharacters(in: .whitespaces))
-            listingLower = desc.lowercased()
+            // Imported listing: use sanitized body as-is; only add price when absent
+            let body = listing.trimmingCharacters(in: .whitespaces)
+            sections.append(body)
+            let lower = body.lowercased()
+            if !lower.contains("precio") && !lower.contains(" q.") &&
+               !lower.contains("gtq") && !lower.contains("usd") {
+                sections.append("Precio: \(buildPriceText(for: property))")
+            }
         } else {
-            listingLower = ""
-        }
-
-        // Append price only when not already present in listing body
-        let hasPriceInListing = listingLower.contains("precio") ||
-                                listingLower.contains(" q.") || listingLower.contains("gtq") ||
-                                listingLower.contains("usd")
-        if !hasPriceInListing {
-            let priceStr = fmt(property.price, currency: property.currency)
-            var priceSection: String
-            switch property.operationType {
-            case "rent":  priceSection = "\(priceStr) mensuales."
-            case "sale":  priceSection = "\(priceStr)."
-            default:      priceSection = "\(priceStr)."
+            // No listing text — assemble from structured fields
+            if let desc = property.publicDescription,
+               !desc.trimmingCharacters(in: .whitespaces).isEmpty {
+                sections.append(desc.trimmingCharacters(in: .whitespaces))
             }
-            if let fee = property.maintenanceFee {
-                let feeStr = fmt(fee, currency: property.currency)
-                priceSection += property.maintenanceIncluded
-                    ? " Mantenimiento (\(feeStr)/mes) incluido."
-                    : " Mantenimiento \(feeStr)/mes no incluido."
+            sections.append("Precio: \(buildPriceText(for: property))")
+            let chars = buildCompactCharacteristics(for: property)
+            if !chars.isEmpty { sections.append(chars) }
+            let amensList = property.amenities.filter { !$0.isEmpty }
+            if !amensList.isEmpty {
+                sections.append("Amenidades: \(amensList.joined(separator: ", ")).")
             }
-            sections.append("Precio: \(priceSection)")
-        }
-
-        // Append requirements only when not already present
-        if !listingLower.contains("requisito") {
-            let reqs = property.requirements.filter { !$0.isEmpty }
-            if reqs.isEmpty {
-                sections.append("Requisitos: Permítame confirmar los requisitos específicos de esta propiedad.")
-            } else {
-                sections.append("Requisitos: \(reqs.joined(separator: ", ")).")
+            let included = (property.includedAppliances + property.includedItems).filter { !$0.isEmpty }
+            if !included.isEmpty {
+                sections.append("Incluye: \(included.joined(separator: ", ")).")
+            }
+            let excluded = property.excludedItems.filter { !$0.isEmpty }
+            if !excluded.isEmpty {
+                sections.append("No incluye: \(excluded.joined(separator: ", ")).")
             }
         }
-
-        // Append maps links when approved location is available
-        let maps = buildMapsLinks(for: property)
-        if !maps.isEmpty { sections.append(maps) }
 
         return sections.joined(separator: "\n\n")
     }
 
-    private static func buildMapsLinks(for property: KeyboardSafeProperty) -> String {
-        var parts: [String] = []
-        if let lat = property.latitude, let lon = property.longitude {
-            let gmURL = String(format: "https://www.google.com/maps/search/?api=1&query=%.6f,%.6f", lat, lon)
-            let wzURL = String(format: "https://waze.com/ul?ll=%.6f,%.6f&navigate=yes", lat, lon)
-            parts.append("Google Maps:\n\(gmURL)")
-            parts.append("Waze:\n\(wzURL)")
-        } else if let wzURL = property.wazeURL, !wzURL.isEmpty {
-            let label = property.publicLocationLabel ?? property.locationSummary
-            if let encoded = label.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) {
-                parts.append("Google Maps:\nhttps://www.google.com/maps/search/?api=1&query=\(encoded)")
-            }
-            parts.append("Waze:\n\(wzURL)")
-        } else if property.isExactLocationShareable, let url = property.googleMapsURL, !url.isEmpty {
-            parts.append("Google Maps:\n\(url)")
+    private static func buildPriceText(for property: KeyboardSafeProperty) -> String {
+        let priceStr = fmt(property.price, currency: property.currency)
+        var text: String
+        switch property.operationType {
+        case "rent":  text = "\(priceStr) mensuales."
+        case "sale":  text = "\(priceStr)."
+        default:      text = "\(priceStr)."
         }
+        if let fee = property.maintenanceFee {
+            let feeStr = fmt(fee, currency: property.currency)
+            text += property.maintenanceIncluded
+                ? " Mantenimiento (\(feeStr)/mes) incluido."
+                : " Mantenimiento \(feeStr)/mes no incluido."
+        }
+        return text
+    }
+
+    private static func buildCompactCharacteristics(for property: KeyboardSafeProperty) -> String {
+        var parts: [String] = []
+        if property.bedrooms > 0 {
+            parts.append("\(property.bedrooms) recámara\(property.bedrooms == 1 ? "" : "s")")
+        }
+        if property.bathrooms > 0 {
+            parts.append("\(fmtDouble(property.bathrooms)) baño\(property.bathrooms == 1 ? "" : "s")")
+        }
+        if let half = property.halfBathrooms, half > 0 {
+            parts.append("\(half) medio\(half == 1 ? "" : "s") baño\(half == 1 ? "" : "s")")
+        }
+        if property.parkingSpaces > 0 {
+            parts.append("\(property.parkingSpaces) parqueo\(property.parkingSpaces == 1 ? "" : "s")")
+        }
+        if property.areaSquareMeters > 0 {
+            parts.append("\(fmtDouble(property.areaSquareMeters)) m²")
+        }
+        guard !parts.isEmpty else { return "" }
+        return parts.joined(separator: ", ") + "."
+    }
+
+    private static func buildMapsLinks(for property: KeyboardSafeProperty) -> String {
+        let (mapsURL, wzURL) = resolveLinks(for: property)
+        var parts: [String] = []
+        if !mapsURL.isEmpty { parts.append("Google Maps:\n\(mapsURL)") }
+        if !wzURL.isEmpty   { parts.append("Waze:\n\(wzURL)") }
         return parts.joined(separator: "\n\n")
+    }
+
+    /// Returns (googleMapsURL, wazeURL) using confirmed coordinates first,
+    /// then stored URLs, then encoded public-location label as fallback.
+    /// Never force-unwraps. Returns empty strings when no link can be formed.
+    private static func resolveLinks(for property: KeyboardSafeProperty) -> (maps: String, waze: String) {
+        let label = property.displayLocation
+        let encoded = label.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
+
+        if let lat = property.latitude, let lon = property.longitude {
+            return (
+                maps: String(format: "https://www.google.com/maps/search/?api=1&query=%.6f,%.6f", lat, lon),
+                waze: String(format: "https://waze.com/ul?ll=%.6f,%.6f&navigate=yes", lat, lon)
+            )
+        }
+
+        // Maps: stored URL (when shareable) → encoded label search
+        let mapsURL: String
+        if property.isExactLocationShareable, let stored = property.googleMapsURL, !stored.isEmpty {
+            mapsURL = stored
+        } else if !encoded.isEmpty {
+            mapsURL = "https://www.google.com/maps/search/?api=1&query=\(encoded)"
+        } else {
+            mapsURL = ""
+        }
+
+        // Waze: stored URL → encoded label search
+        let wazeURL: String
+        if let stored = property.wazeURL, !stored.isEmpty {
+            wazeURL = stored
+        } else if !encoded.isEmpty {
+            wazeURL = "https://waze.com/ul?q=\(encoded)"
+        } else {
+            wazeURL = ""
+        }
+
+        return (maps: mapsURL, waze: wazeURL)
     }
 
     // MARK: - Availability
@@ -180,20 +231,10 @@ enum TemplateEngine {
     // MARK: - Location
 
     static func location(for property: KeyboardSafeProperty) -> String {
-        let label = property.displayLocation
-        var parts: [String] = ["📍 Ubicación: \(label)"]
-
-        if let lat = property.latitude, let lon = property.longitude {
-            parts.append("Google Maps:\n\(String(format: "https://www.google.com/maps/search/?api=1&query=%.6f,%.6f", lat, lon))")
-            parts.append("Waze:\n\(String(format: "https://waze.com/ul?ll=%.6f,%.6f&navigate=yes", lat, lon))")
-        } else if let wzURL = property.wazeURL, !wzURL.isEmpty {
-            let encoded = label.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
-            parts.append("Google Maps:\nhttps://www.google.com/maps/search/?api=1&query=\(encoded)")
-            parts.append("Waze:\n\(wzURL)")
-        } else if property.isExactLocationShareable, let url = property.googleMapsURL, !url.isEmpty {
-            parts.append("Google Maps:\n\(url)")
-        }
-
+        var parts: [String] = ["📍 Ubicación: \(property.displayLocation)"]
+        let (mapsURL, wzURL) = resolveLinks(for: property)
+        if !mapsURL.isEmpty { parts.append("Google Maps:\n\(mapsURL)") }
+        if !wzURL.isEmpty   { parts.append("Waze:\n\(wzURL)") }
         return parts.joined(separator: "\n\n")
     }
 

@@ -308,15 +308,38 @@ struct TemplateEnginePriceTests {
 @Suite("TemplateEngine — Location")
 struct TemplateEngineLocationTests {
 
-    @Test func locationWithoutMapURLOmitsLink() {
+    @Test func locationAlwaysIncludesPublicLabel() {
+        var p = ProjectionTests_Helper.makeFullProperty()
+        p.publicLocationLabel = "Zona 10"
+        p.isExactLocationShareable = false
+        let kp = KeyboardSafeProperty(projecting: p)
+        let text = TemplateEngine.location(for: kp)
+        #expect(text.contains("Zona 10"))
+    }
+
+    @Test func locationFallsBackToLabelSearchWhenNoCoordinates() {
         var p = ProjectionTests_Helper.makeFullProperty()
         p.isExactLocationShareable = false
         let kp = KeyboardSafeProperty(projecting: p)
         let text = TemplateEngine.location(for: kp)
-        #expect(!text.contains("http"))
+        // Always emits label-search links even without confirmed coordinates
+        #expect(text.contains("maps/search") || text.contains("maps.google.com"))
+        #expect(text.contains("waze.com"))
     }
 
-    @Test func locationWithMapURLIncludesLink() {
+    @Test func locationWithCoordinatesUsesExactLinks() {
+        var p = ProjectionTests_Helper.makeFullProperty()
+        p.isExactLocationShareable = true
+        p.latitude = 14.6349
+        p.longitude = -90.5069
+        let kp = KeyboardSafeProperty(projecting: p)
+        let text = TemplateEngine.location(for: kp)
+        #expect(text.contains("14.634900"))
+        #expect(text.contains("-90.506900"))
+        #expect(text.contains("waze.com/ul?ll="))
+    }
+
+    @Test func locationWithShareableURLIncludesStoredLink() {
         var p = ProjectionTests_Helper.makeFullProperty()
         p.isExactLocationShareable = true
         p.googleMapsURL = "https://maps.google.com?q=14.6,-90.5"
@@ -325,13 +348,25 @@ struct TemplateEngineLocationTests {
         #expect(text.contains("https://maps.google.com"))
     }
 
-    @Test func locationWithShareableFalseHidesURL() {
+    @Test func locationWithShareableFalseUsesLabelSearchNotStoredURL() {
         var p = ProjectionTests_Helper.makeFullProperty()
         p.isExactLocationShareable = false
         p.googleMapsURL = "https://maps.google.com?q=14.6,-90.5"
         let kp = KeyboardSafeProperty(projecting: p)
         let text = TemplateEngine.location(for: kp)
-        #expect(!text.contains("http"))
+        // Stored coordinate URL is NOT shown when isExactLocationShareable=false
+        #expect(!text.contains("maps.google.com?q=14.6"))
+        // Label-search IS emitted as safe fallback
+        #expect(text.contains("maps/search") || text.contains("waze.com"))
+    }
+
+    @Test func locationWithStoredWazeURLUsesIt() {
+        var p = ProjectionTests_Helper.makeFullProperty()
+        p.isExactLocationShareable = false
+        p.wazeURL = "https://waze.com/ul?q=Zona+10"
+        let kp = KeyboardSafeProperty(projecting: p)
+        let text = TemplateEngine.location(for: kp)
+        #expect(text.contains("https://waze.com/ul?q=Zona+10"))
     }
 }
 
@@ -556,5 +591,276 @@ struct IUSIFieldTests {
         let kp = KeyboardSafeProperty(projecting: p)
         #expect(kp.iusiAmount == Decimal(string: "1800.00"))
         #expect(kp.iusiFrequency == "semestral")
+    }
+}
+
+// MARK: - Location sharing round-trip tests
+
+@Suite("LocationSharing")
+struct LocationSharingTests {
+
+    private func makeEncoder() -> JSONEncoder {
+        let e = JSONEncoder(); e.dateEncodingStrategy = .iso8601; return e
+    }
+    private func makeDecoder() -> JSONDecoder {
+        let d = JSONDecoder(); d.dateDecodingStrategy = .iso8601; return d
+    }
+
+    @Test func wazeURLRoundTripsInProperty() throws {
+        var p = ProjectionTests_Helper.makeFullProperty()
+        p.wazeURL = "https://waze.com/ul?ll=14.634900,-90.506900&navigate=yes"
+        let data = try makeEncoder().encode(p)
+        let decoded = try makeDecoder().decode(Property.self, from: data)
+        #expect(decoded.wazeURL == "https://waze.com/ul?ll=14.634900,-90.506900&navigate=yes")
+    }
+
+    @Test func wazeURLDefaultsToNilInLegacyJSON() throws {
+        let json = #"""
+        {"id":"x","internalCode":"SUN-001","title":"T","operationType":"rent","status":"available",
+         "price":5000,"currency":"GTQ","maintenanceIncluded":false,"locationSummary":"Zona 10",
+         "country":"Guatemala","bedrooms":2,"bathrooms":1.0,"amenities":[],"includedAppliances":[],
+         "requirements":[],"petPolicy":"notAllowed","quickReplyTemplates":[],"isFavorite":false,
+         "createdAt":"2025-01-01T00:00:00Z","updatedAt":"2025-01-01T00:00:00Z"}
+        """#.data(using: .utf8)!
+        let p = try makeDecoder().decode(Property.self, from: json)
+        #expect(p.wazeURL == nil)
+    }
+
+    @Test func wazeURLProjectedToKeyboardSafeProperty() {
+        var p = ProjectionTests_Helper.makeFullProperty()
+        p.wazeURL = "https://waze.com/ul?q=Zona%2010"
+        let kp = KeyboardSafeProperty(projecting: p)
+        #expect(kp.wazeURL == "https://waze.com/ul?q=Zona%2010")
+    }
+
+    @Test func googleMapsURLProjectedToKeyboardSafeProperty() {
+        var p = ProjectionTests_Helper.makeFullProperty()
+        p.googleMapsURL = "https://www.google.com/maps?q=14.634900,-90.506900"
+        let kp = KeyboardSafeProperty(projecting: p)
+        #expect(kp.googleMapsURL == "https://www.google.com/maps?q=14.634900,-90.506900")
+    }
+
+    @Test func publicLocationLabelProjectedToKeyboardSafeProperty() {
+        var p = ProjectionTests_Helper.makeFullProperty()
+        p.publicLocationLabel = "Zona 10, Ciudad de Guatemala"
+        let kp = KeyboardSafeProperty(projecting: p)
+        #expect(kp.publicLocationLabel == "Zona 10, Ciudad de Guatemala")
+    }
+
+    @Test func snapshotRoundTripsWazeURL() throws {
+        var p = ProjectionTests_Helper.makeFullProperty()
+        p.wazeURL = "https://waze.com/ul?ll=14.634900,-90.506900&navigate=yes"
+        p.isExactLocationShareable = true
+        p.latitude = 14.6349
+        p.longitude = -90.5069
+        let kp = KeyboardSafeProperty(projecting: p)
+        let snapshot = KeyboardCatalogSnapshot(
+            schemaVersion: KeyboardCatalogSnapshot.currentSchemaVersion,
+            catalogVersion: 1,
+            generatedAt: Date(timeIntervalSinceReferenceDate: 800_000_000),
+            activePropertyID: nil,
+            properties: [kp],
+            generalMessages: []
+        )
+        let data = try makeEncoder().encode(snapshot)
+        let decoded = try makeDecoder().decode(KeyboardCatalogSnapshot.self, from: data)
+        #expect(decoded.properties.first?.wazeURL == "https://waze.com/ul?ll=14.634900,-90.506900&navigate=yes")
+    }
+
+    @Test func locationTemplateWithCoordinatesEmitsBothLinks() {
+        var p = ProjectionTests_Helper.makeFullProperty()
+        p.isExactLocationShareable = true
+        p.latitude = 14.6349
+        p.longitude = -90.5069
+        let kp = KeyboardSafeProperty(projecting: p)
+        let text = TemplateEngine.location(for: kp)
+        #expect(text.contains("maps/search") || text.contains("maps.google.com"))
+        #expect(text.contains("waze.com/ul?ll="))
+    }
+
+    @Test func locationTemplateWithPublicLabelUsesItInHeader() {
+        var p = ProjectionTests_Helper.makeFullProperty()
+        p.publicLocationLabel = "Zona 14, Guatemala"
+        let kp = KeyboardSafeProperty(projecting: p)
+        let text = TemplateEngine.location(for: kp)
+        #expect(text.contains("📍 Ubicación: Zona 14, Guatemala"))
+    }
+
+    @Test func locationTemplateFallsBackToSearchWhenNoCoords() {
+        var p = ProjectionTests_Helper.makeFullProperty()
+        p.isExactLocationShareable = false
+        p.publicLocationLabel = "Zona 10"
+        let kp = KeyboardSafeProperty(projecting: p)
+        let text = TemplateEngine.location(for: kp)
+        // Label is encoded into search URLs
+        #expect(text.contains("Zona"))
+        #expect(text.contains("maps/search") || text.contains("waze.com"))
+    }
+
+    @Test func generalInfoOmitsMapsLinksAndRequirements() {
+        // Location and requirements belong in their own keyboard buttons, never in General Info
+        var p = ProjectionTests_Helper.makeFullProperty()
+        p.publicLocationLabel = "Zona 10"
+        p.isExactLocationShareable = true
+        p.latitude = 14.6349
+        p.longitude = -90.5069
+        let kp = KeyboardSafeProperty(projecting: p)
+        let text = TemplateEngine.generalInfo(for: kp)
+        #expect(!text.contains("maps/search"))
+        #expect(!text.contains("maps.google.com"))
+        #expect(!text.contains("waze.com"))
+        #expect(!text.contains("Requisitos:"))
+        #expect(text.contains("Precio:"))
+    }
+}
+
+// MARK: - General Info template tests
+
+@Suite("TemplateEngine — General Info")
+struct TemplateEngineGeneralInfoTests {
+
+    private func makeProperty() -> Property {
+        ProjectionTests_Helper.makeFullProperty()
+    }
+
+    // MARK: Listing-text path
+
+    @Test func generalInfoUsesListingTextAsMainBody() {
+        var p = makeProperty()
+        p.publicListingText = "Hermoso apartamento en Zona 10 con acabados de lujo."
+        let kp = KeyboardSafeProperty(projecting: p)
+        let text = TemplateEngine.generalInfo(for: kp)
+        #expect(text.contains("Hermoso apartamento en Zona 10 con acabados de lujo."))
+    }
+
+    @Test func generalInfoDoesNotAppendRequirementsWhenListingPresent() {
+        var p = makeProperty()
+        p.publicListingText = "Apartamento disponible en Zona 14."
+        p.requirements = ["Fiador", "3 meses de garantía"]
+        let kp = KeyboardSafeProperty(projecting: p)
+        let text = TemplateEngine.generalInfo(for: kp)
+        #expect(!text.contains("Requisitos:"))
+        #expect(!text.contains("Fiador"))
+    }
+
+    @Test func generalInfoDoesNotAppendMapsLinksWhenListingPresent() {
+        var p = makeProperty()
+        p.publicListingText = "Casa en venta en Zona 15."
+        p.isExactLocationShareable = true
+        p.latitude = 14.6349
+        p.longitude = -90.5069
+        let kp = KeyboardSafeProperty(projecting: p)
+        let text = TemplateEngine.generalInfo(for: kp)
+        // Location links belong in the Location button only
+        #expect(!text.contains("maps/search"))
+        #expect(!text.contains("maps.google.com"))
+        #expect(!text.contains("waze.com"))
+    }
+
+    @Test func generalInfoAppendsPriceWhenAbsentFromListing() {
+        var p = makeProperty()
+        p.publicListingText = "Lindo apartamento ideal para profesionales."
+        p.price = 6_500
+        p.currency = "GTQ"
+        p.operationType = .rent
+        let kp = KeyboardSafeProperty(projecting: p)
+        let text = TemplateEngine.generalInfo(for: kp)
+        #expect(text.contains("Precio:"))
+        #expect(text.contains("mensuales"))
+    }
+
+    @Test func generalInfoDoesNotDuplicatePriceWhenAlreadyInListing() {
+        var p = makeProperty()
+        p.publicListingText = "Apartamento. Precio Q 6,500.00 mensuales. Excelente ubicación."
+        p.price = 6_500
+        p.currency = "GTQ"
+        let kp = KeyboardSafeProperty(projecting: p)
+        let text = TemplateEngine.generalInfo(for: kp)
+        // "precio" keyword is in listing → should not add a second Precio: block
+        let priceCount = text.components(separatedBy: "Precio:").count - 1
+        #expect(priceCount == 0)
+    }
+
+    // MARK: Structured-fields path (no listing text)
+
+    @Test func generalInfoDoesNotAppendRequirementsWhenNoListing() {
+        var p = makeProperty()
+        p.requirements = ["Fiador", "2 meses de garantía"]
+        let kp = KeyboardSafeProperty(projecting: p)
+        let text = TemplateEngine.generalInfo(for: kp)
+        #expect(!text.contains("Requisitos:"))
+        #expect(!text.contains("Fiador"))
+    }
+
+    @Test func generalInfoDoesNotAppendMapsLinksWhenNoListing() {
+        var p = makeProperty()
+        p.isExactLocationShareable = true
+        p.latitude = 14.6349
+        p.longitude = -90.5069
+        let kp = KeyboardSafeProperty(projecting: p)
+        let text = TemplateEngine.generalInfo(for: kp)
+        #expect(!text.contains("maps/search"))
+        #expect(!text.contains("maps.google.com"))
+        #expect(!text.contains("waze.com"))
+    }
+
+    @Test func generalInfoBuildsCharacteristicsFromStructuredFields() {
+        var p = makeProperty()
+        p.bedrooms = 3
+        p.bathrooms = 2
+        p.parkingSpaces = 1
+        p.areaSquareMeters = 120
+        let kp = KeyboardSafeProperty(projecting: p)
+        let text = TemplateEngine.generalInfo(for: kp)
+        #expect(text.contains("3"))
+        #expect(text.contains("recámara"))
+        #expect(text.contains("120") || text.contains("m²"))
+    }
+
+    @Test func generalInfoIncludesAmenitiesWhenNoListing() {
+        var p = makeProperty()
+        p.amenities = ["Piscina", "Gimnasio"]
+        let kp = KeyboardSafeProperty(projecting: p)
+        let text = TemplateEngine.generalInfo(for: kp)
+        #expect(text.contains("Amenidades:"))
+        #expect(text.contains("Piscina"))
+        #expect(text.contains("Gimnasio"))
+    }
+
+    @Test func generalInfoIncludesIncludedItemsWhenNoListing() {
+        var p = makeProperty()
+        p.includedAppliances = ["Estufa", "Refrigeradora"]
+        p.includedItems = ["Escritorio"]
+        let kp = KeyboardSafeProperty(projecting: p)
+        let text = TemplateEngine.generalInfo(for: kp)
+        #expect(text.contains("Incluye:"))
+        #expect(text.contains("Estufa"))
+        #expect(text.contains("Escritorio"))
+    }
+
+    @Test func generalInfoIncludesExcludedItemsWhenNoListing() {
+        var p = makeProperty()
+        p.excludedItems = ["Cortinas", "Línea blanca"]
+        let kp = KeyboardSafeProperty(projecting: p)
+        let text = TemplateEngine.generalInfo(for: kp)
+        #expect(text.contains("No incluye:"))
+        #expect(text.contains("Cortinas"))
+    }
+
+    @Test func generalInfoShowsStatusWarningForUnavailableProperty() {
+        var p = makeProperty()
+        p.status = .reserved
+        let kp = KeyboardSafeProperty(projecting: p)
+        let text = TemplateEngine.generalInfo(for: kp)
+        #expect(text.contains("⚠️"))
+        #expect(text.contains("disponible"))
+    }
+
+    @Test func generalInfoDoesNotShowStatusWarningWhenAvailable() {
+        var p = makeProperty()
+        p.status = .available
+        let kp = KeyboardSafeProperty(projecting: p)
+        let text = TemplateEngine.generalInfo(for: kp)
+        #expect(!text.contains("⚠️"))
     }
 }

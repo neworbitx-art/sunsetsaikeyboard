@@ -3,6 +3,7 @@ import SwiftUI
 struct PropertyEditorView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var vm: PropertyEditorViewModel
+    @State private var showingLocationPicker = false
     @State private var showingSaveErrorAlert = false
 
     let property: Property?
@@ -19,7 +20,7 @@ struct PropertyEditorView: View {
     var body: some View {
         NavigationStack {
             Form {
-                PropertyEditorFormSections(vm: vm)
+                PropertyEditorFormSections(vm: vm, onShowLocationPicker: { showingLocationPicker = true })
 
                 if !vm.validationErrors.isEmpty {
                     Section("Errores") {
@@ -47,6 +48,20 @@ struct PropertyEditorView: View {
                 Button("Entendido", role: .cancel) {}
             } message: {
                 Text(vm.validationErrors.joined(separator: "\n"))
+            }
+            .sheet(isPresented: $showingLocationPicker) {
+                LocationPickerView(
+                    latitude: vm.latitude,
+                    longitude: vm.longitude
+                ) { lat, lon, address in
+                    vm.latitude = lat
+                    vm.longitude = lon
+                    vm.formattedAddress = address
+                    vm.locationSource = .mapPicker
+                    if vm.locationSummary.trimmingCharacters(in: .whitespaces).isEmpty {
+                        vm.locationSummary = address ?? String(format: "%.5f, %.5f", lat, lon)
+                    }
+                }
             }
         }
         .task(id: property?.id ?? "new") {

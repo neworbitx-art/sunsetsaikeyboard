@@ -3,6 +3,7 @@ import SwiftUI
 struct DraftReviewView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var vm: PropertyEditorViewModel
+    @State private var showingLocationPicker = false
     @State private var showingConfirmDiscard = false
     @State private var showingSaveErrorAlert = false
 
@@ -22,7 +23,7 @@ struct DraftReviewView: View {
         NavigationStack {
             Form {
                 confidenceHeaderSection
-                PropertyEditorFormSections(vm: vm, draft: draft)
+                PropertyEditorFormSections(vm: vm, draft: draft, onShowLocationPicker: { showingLocationPicker = true })
 
                 if !vm.validationErrors.isEmpty {
                     Section("Errores") {
@@ -58,6 +59,20 @@ struct DraftReviewView: View {
                 Button("Entendido", role: .cancel) {}
             } message: {
                 Text(vm.validationErrors.joined(separator: "\n"))
+            }
+            .sheet(isPresented: $showingLocationPicker) {
+                LocationPickerView(
+                    latitude: vm.latitude,
+                    longitude: vm.longitude
+                ) { lat, lon, address in
+                    vm.latitude = lat
+                    vm.longitude = lon
+                    vm.formattedAddress = address
+                    vm.locationSource = .mapPicker
+                    if vm.locationSummary.trimmingCharacters(in: .whitespaces).isEmpty {
+                        vm.locationSummary = address ?? String(format: "%.5f, %.5f", lat, lon)
+                    }
+                }
             }
         }
         .task { await vm.prepareForNew() }

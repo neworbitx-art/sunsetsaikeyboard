@@ -5,6 +5,9 @@ struct PropertyDetailView: View {
     let onEdit: (Property) -> Void
     let onFavoriteToggle: (Property) -> Void
 
+    @Environment(\.openURL) private var openURL
+    @State private var badURLAlert = false
+
     var body: some View {
         List {
             headerSection
@@ -19,6 +22,11 @@ struct PropertyDetailView: View {
             metaSection
         }
         .listStyle(.insetGrouped)
+        .alert("No se puede abrir el enlace", isPresented: $badURLAlert) {
+            Button("Entendido", role: .cancel) {}
+        } message: {
+            Text("La URL almacenada no es válida. Puede corregirla en el editor de propiedad.")
+        }
         .navigationTitle(property.displayTitle.isEmpty ? property.internalCode : property.displayTitle)
         .navigationBarTitleDisplayMode(.large)
         .toolbar {
@@ -112,9 +120,14 @@ struct PropertyDetailView: View {
                 LabeledContent("Coordenadas",
                                value: String(format: "%.5f, %.5f", lat, lon))
             }
-            if let mapsURL = property.googleMapsURL,
-               let url = URL(string: mapsURL) {
-                Link(destination: url) {
+            if let mapsURL = property.googleMapsURL, !mapsURL.isEmpty {
+                Button {
+                    if let url = URL(string: mapsURL) {
+                        openURL(url)
+                    } else {
+                        badURLAlert = true
+                    }
+                } label: {
                     Label("Abrir en Google Maps", systemImage: "map")
                 }
             }

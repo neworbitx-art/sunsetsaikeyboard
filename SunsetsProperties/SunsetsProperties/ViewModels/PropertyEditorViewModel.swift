@@ -33,6 +33,7 @@ final class PropertyEditorViewModel {
     var longitude: Double? = nil
     var formattedAddress: String? = nil
     var googleMapsURLText: String = ""
+    var wazeURLText: String = ""
     var locationSource: LocationSource = .manual
     var isExactLocationShareable: Bool = false
 
@@ -153,6 +154,7 @@ final class PropertyEditorViewModel {
         longitude = property.longitude
         formattedAddress = property.formattedAddress
         googleMapsURLText = property.googleMapsURL ?? ""
+        wazeURLText = property.wazeURL ?? ""
         locationSource = property.locationSource
         isExactLocationShareable = property.isExactLocationShareable
 
@@ -283,7 +285,7 @@ final class PropertyEditorViewModel {
             }
         }
 
-        // Generate maps URL from coordinates if none explicitly entered
+        // Generate Maps URL from coordinates if none explicitly entered
         let resolvedMapsURL: String?
         if !urlText.isEmpty {
             resolvedMapsURL = urlText
@@ -291,6 +293,24 @@ final class PropertyEditorViewModel {
             resolvedMapsURL = GoogleMapsURLParser.generateURL(latitude: lat, longitude: lon)
         } else {
             resolvedMapsURL = nil
+        }
+
+        // Generate Waze URL: user-entered value → coordinate-based → label-search fallback
+        let resolvedWazeURL: String?
+        let wazeText = wazeURLText.trimmingCharacters(in: .whitespaces)
+        if !wazeText.isEmpty {
+            resolvedWazeURL = wazeText
+        } else if let lat, let lon {
+            resolvedWazeURL = String(format: "https://waze.com/ul?ll=%.6f,%.6f&navigate=yes", lat, lon)
+        } else {
+            let searchLabel = nilIfEmpty(publicLocationLabelText) ?? nilIfEmpty(locationSummary)
+            if let searchLabel,
+               let encoded = searchLabel.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
+               !encoded.isEmpty {
+                resolvedWazeURL = "https://waze.com/ul?q=\(encoded)"
+            } else {
+                resolvedWazeURL = nil
+            }
         }
 
         let effectiveDisplayTitle: String = {
@@ -323,6 +343,7 @@ final class PropertyEditorViewModel {
             latitude: lat,
             longitude: lon,
             googleMapsURL: resolvedMapsURL,
+            wazeURL: resolvedWazeURL,
             locationSource: source,
             isExactLocationShareable: isExactLocationShareable,
             bedrooms: Int(bedroomsText) ?? 0,

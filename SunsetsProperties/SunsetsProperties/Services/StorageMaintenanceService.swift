@@ -85,7 +85,7 @@ final class StorageMaintenanceService {
         defaults.removeObject(forKey: "catalogMigrated_1_1")
 
         // Reset App Group keys and cache
-        let appGroupID = "group.com.sunsetsrealestate.sunsetsai"
+        let appGroupID = "group.com.zircondata.sunsetsai"
         if let groupDefaults = UserDefaults(suiteName: appGroupID) {
             groupDefaults.removeObject(forKey: "active_property_id")
             groupDefaults.removeObject(forKey: "keyboard_selected_property_id")

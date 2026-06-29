@@ -149,16 +149,8 @@ extension KeyboardSafeProperty {
             longitude = nil
         }
 
-        // Waze URL: coordinate-based when exact sharing approved; label-based otherwise
-        if property.isExactLocationShareable,
-           let lat = property.latitude, let lon = property.longitude {
-            wazeURL = String(format: "https://waze.com/ul?ll=%.6f,%.6f&navigate=yes", lat, lon)
-        } else if let label = property.publicLocationLabel, !label.isEmpty,
-                  let encoded = label.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) {
-            wazeURL = "https://waze.com/ul?q=\(encoded)"
-        } else {
-            wazeURL = nil
-        }
+        // Waze URL: stored value from Property (computed by PropertyEditorViewModel.buildProperty)
+        wazeURL = property.wazeURL
 
         bedrooms         = property.bedrooms
         bathrooms        = property.bathrooms

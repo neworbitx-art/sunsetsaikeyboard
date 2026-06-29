@@ -38,6 +38,7 @@ struct Property: Identifiable, Codable, Equatable {
     var latitude: Double? = nil
     var longitude: Double? = nil
     var googleMapsURL: String? = nil
+    var wazeURL: String? = nil
     var locationSource: LocationSource = .manual
     var isExactLocationShareable: Bool = false
 
@@ -203,7 +204,7 @@ struct Property: Identifiable, Codable, Equatable {
         case locationSummary, publicLocationLabel
         case neighborhood, city, state, country
         case fullAddress, formattedAddress
-        case latitude, longitude, googleMapsURL, locationSource, isExactLocationShareable
+        case latitude, longitude, googleMapsURL, wazeURL, locationSource, isExactLocationShareable
         case bedrooms, bathrooms, halfBathrooms, parkingSpaces, areaSquareMeters
         case floorNumber, totalFloors
         case amenities, includedAppliances, includedItems, excludedItems
@@ -250,6 +251,7 @@ extension Property {
         latitude                = try c.decodeIfPresent(Double.self, forKey: .latitude)
         longitude               = try c.decodeIfPresent(Double.self, forKey: .longitude)
         googleMapsURL           = try c.decodeIfPresent(String.self, forKey: .googleMapsURL)
+        wazeURL                 = try c.decodeIfPresent(String.self, forKey: .wazeURL)
         locationSource          = try c.decodeIfPresent(LocationSource.self, forKey: .locationSource) ?? .manual
         isExactLocationShareable = try c.decodeIfPresent(Bool.self, forKey: .isExactLocationShareable) ?? false
 

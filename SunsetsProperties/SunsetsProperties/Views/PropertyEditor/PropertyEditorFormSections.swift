@@ -6,8 +6,10 @@ import SwiftUI
 struct PropertyEditorFormSections: View {
     @Bindable var vm: PropertyEditorViewModel
     var draft: PropertyDraft? = nil
-
-    @State private var showingLocationPicker = false
+    /// Called when the map-picker button is tapped. The parent view owns the
+    /// sheet state so it can be attached to the NavigationStack — the safe
+    /// presentation host on physical iOS devices.
+    var onShowLocationPicker: (() -> Void)? = nil
 
     private var isReviewMode: Bool { draft != nil }
 
@@ -195,7 +197,7 @@ struct PropertyEditorFormSections: View {
             TextField("País", text: $vm.country)
 
             Button {
-                showingLocationPicker = true
+                onShowLocationPicker?()
             } label: {
                 if let lat = vm.latitude, let lon = vm.longitude {
                     HStack {
@@ -229,19 +231,16 @@ struct PropertyEditorFormSections: View {
                     .font(.caption)
                     .frame(maxWidth: 200)
             }
-        }
-        .sheet(isPresented: $showingLocationPicker) {
-            LocationPickerView(
-                latitude: vm.latitude,
-                longitude: vm.longitude
-            ) { lat, lon, address in
-                vm.latitude = lat
-                vm.longitude = lon
-                vm.formattedAddress = address
-                vm.locationSource = .mapPicker
-                if vm.locationSummary.trimmingCharacters(in: .whitespaces).isEmpty {
-                    vm.locationSummary = address ?? String(format: "%.5f, %.5f", lat, lon)
-                }
+            HStack {
+                Text("URL Waze")
+                Spacer()
+                TextField("https://waze.com/ul?q=…", text: $vm.wazeURLText)
+                    .keyboardType(.URL)
+                    .autocorrectionDisabled()
+                    .textInputAutocapitalization(.never)
+                    .multilineTextAlignment(.trailing)
+                    .font(.caption)
+                    .frame(maxWidth: 200)
             }
         }
     }

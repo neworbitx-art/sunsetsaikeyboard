@@ -347,9 +347,9 @@ Defects found during continued manual validation of Milestone 2 (post-correction
 |----------|---------------|
 | iOS deployment target | iOS 17 minimum |
 | Primary device | iPhone only (iPad out of scope for MVP) |
-| Main app bundle ID | `com.sunsetsrealestate.sunsetsproperties` |
-| Keyboard extension bundle ID | `com.sunsetsrealestate.sunsetsproperties.keyboard` |
-| App Group identifier | `group.com.sunsetsrealestate.sunsetsai` |
+| Main app bundle ID | `com.zircondata.sunsetsproperties` |
+| Keyboard extension bundle ID | `com.zircondata.sunsetsproperties.keyboard` |
+| App Group identifier | `group.com.zircondata.sunsetsai` |
 | Primary language | Spanish for Guatemala (`es-GT`) |
 | Organization model | Single organization (Sunsets Real Estate) |
 | `assignedAgentId` in keyboard cache | Excluded |

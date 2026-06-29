@@ -23,7 +23,7 @@ final class CatalogCacheService {
     // subsequent publish calls that don't explicitly provide one.
     private var _messageRepository: (any GeneralMessageRepository)?
 
-    private let appGroupID = "group.com.sunsetsrealestate.sunsetsai"
+    private let appGroupID = "group.com.zircondata.sunsetsai"
     private let catalogFileName = "keyboard_catalog.json"
     private let versionKey = "catalog_version"
     private let updatedAtKey = "catalog_updated_at"

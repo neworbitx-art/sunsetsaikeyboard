@@ -375,10 +375,10 @@
 				CODE_SIGN_ENTITLEMENTS = SunsetsAIKeyboard/SunsetsAIKeyboard.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 4NYQ7W23X2;
+				DEVELOPMENT_TEAM = PYQSF3J7TM;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = SunsetsAIKeyboard/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = SunsetsAIKeyboard;
+				INFOPLIST_KEY_CFBundleDisplayName = "SunIA Keyboard";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -387,7 +387,7 @@
 					"@executable_path/../../Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.sunsetsrealestate.sunsetsproperties.keyboard;
+				PRODUCT_BUNDLE_IDENTIFIER = com.zircondata.sunsetsproperties.keyboard;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
@@ -409,10 +409,10 @@
 				CODE_SIGN_ENTITLEMENTS = SunsetsAIKeyboard/SunsetsAIKeyboard.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 4NYQ7W23X2;
+				DEVELOPMENT_TEAM = PYQSF3J7TM;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = SunsetsAIKeyboard/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = SunsetsAIKeyboard;
+				INFOPLIST_KEY_CFBundleDisplayName = "SunIA Keyboard";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -421,7 +421,7 @@
 					"@executable_path/../../Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.sunsetsrealestate.sunsetsproperties.keyboard;
+				PRODUCT_BUNDLE_IDENTIFIER = com.zircondata.sunsetsproperties.keyboard;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
@@ -563,13 +563,14 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				CODE_SIGN_ENTITLEMENTS = SunsetsProperties/SunsetsProperties.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 4NYQ7W23X2;
+				DEVELOPMENT_TEAM = PYQSF3J7TM;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_CFBundleDisplayName = "Sunsets Properties";
+				INFOPLIST_KEY_CFBundleDisplayName = SunIA;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.business";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -582,7 +583,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.sunsetsrealestate.sunsetsproperties;
+				PRODUCT_BUNDLE_IDENTIFIER = com.zircondata.sunsetsproperties;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
@@ -603,13 +604,14 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				CODE_SIGN_ENTITLEMENTS = SunsetsProperties/SunsetsProperties.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 4NYQ7W23X2;
+				DEVELOPMENT_TEAM = PYQSF3J7TM;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_CFBundleDisplayName = "Sunsets Properties";
+				INFOPLIST_KEY_CFBundleDisplayName = SunIA;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.business";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -622,7 +624,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.sunsetsrealestate.sunsetsproperties;
+				PRODUCT_BUNDLE_IDENTIFIER = com.zircondata.sunsetsproperties;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
@@ -648,7 +650,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 26.5;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.sunsetsrealestate.SunsetsPropertiesTests;
+				PRODUCT_BUNDLE_IDENTIFIER = com.zircondata.SunsetsPropertiesTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -670,7 +672,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 26.5;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.sunsetsrealestate.SunsetsPropertiesTests;
+				PRODUCT_BUNDLE_IDENTIFIER = com.zircondata.SunsetsPropertiesTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -690,7 +692,7 @@
 				DEVELOPMENT_TEAM = 4NYQ7W23X2;
 				GENERATE_INFOPLIST_FILE = YES;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.sunsetsrealestate.SunsetsPropertiesUITests;
+				PRODUCT_BUNDLE_IDENTIFIER = com.zircondata.SunsetsPropertiesUITests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -710,7 +712,7 @@
 				DEVELOPMENT_TEAM = 4NYQ7W23X2;
 				GENERATE_INFOPLIST_FILE = YES;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.sunsetsrealestate.SunsetsPropertiesUITests;
+				PRODUCT_BUNDLE_IDENTIFIER = com.zircondata.SunsetsPropertiesUITests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;

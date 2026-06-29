@@ -33,7 +33,7 @@ enum CatalogReaderError: LocalizedError {
 final class CatalogReader {
 
     static let staleCacheThreshold: TimeInterval = 24 * 60 * 60  // 24 hours
-    private let appGroupID = "group.com.sunsetsrealestate.sunsetsai"
+    private let appGroupID = "group.com.zircondata.sunsetsai"
 
     private var appGroupContainer: URL? {
         FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroupID)

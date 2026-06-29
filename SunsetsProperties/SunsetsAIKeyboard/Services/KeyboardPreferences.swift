@@ -4,7 +4,7 @@ import Foundation
 
 final class KeyboardPreferences {
 
-    private let appGroupID = "group.com.sunsetsrealestate.sunsetsai"
+    private let appGroupID = "group.com.zircondata.sunsetsai"
     private let maxRecentCount = 5
 
     private var defaults: UserDefaults? {
