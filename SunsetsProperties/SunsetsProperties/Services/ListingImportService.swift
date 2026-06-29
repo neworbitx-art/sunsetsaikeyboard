@@ -56,9 +56,6 @@ struct LocalListingParser: ListingImportService {
         if let dev = detectedDev { draft.developmentName = DraftField(value: dev, confidence: .medium) }
         // Property type: heading-first detection (prevents room names from overriding type)
         draft.propertyType          = detectStructuredPropertyType(lower, lines: lines)
-        draft.title                 = detectTitle(lines, lower: lower,
-                                                  location: draft.locationSummary.value)
-        draft.publicDescription     = detectPublicDescription(lines: lines, lower: lower)
         draft.status                = DraftField(value: .available, confidence: .high)
         draft.fhaEligibility        = detectFHAEligibility(lower)
         draft.sellerFinancingStatus = detectSellerFinancing(lower)
@@ -577,58 +574,7 @@ struct LocalListingParser: ListingImportService {
                           warning: "No se detectó la ubicación. Ingrese manualmente.")
     }
 
-    // MARK: - Title
-
-    private func detectTitle(_ lines: [String], lower: String, location: String?) -> DraftField<String> {
-        let propType = detectPropertyType(lower)
-
-        // Strategy 1: "TITLE - Location" → left side is development name
-        if let first = lines.first {
-            let parts = first.components(separatedBy: " - ")
-            if parts.count >= 2 {
-                let left = stripLeadingDecoration(parts[0]).trimmingCharacters(in: .whitespaces)
-                if !left.isEmpty && !isPromoPhrase(left) && left.count <= 40 {
-                    let type = propType ?? "Propiedad"
-                    return DraftField(value: "\(type) en \(left)", confidence: .medium,
-                                      warning: "Título generado. Verifique.")
-                }
-            }
-        }
-
-        // Strategy 2: detect development name from heading text
-        // "¡ ... ! DevelopmentName!" — text after last ! in first line
-        for line in lines.prefix(2) {
-            let stripped = stripLeadingDecoration(line)
-            let exclamParts = stripped.components(separatedBy: "!")
-            // Take last non-empty part
-            if let devCandidate = exclamParts.reversed()
-                .first(where: { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }) {
-                let dev = devCandidate.trimmingCharacters(in: .whitespacesAndNewlines)
-                if dev.count >= 3 && dev.count <= 40 && !isPromoPhrase(dev) &&
-                   !dev.lowercased().hasPrefix("agenda") {
-                    let type = propType ?? "Propiedad"
-                    return DraftField(value: "\(type) en \(dev)", confidence: .medium,
-                                      warning: "Título generado. Verifique.")
-                }
-            }
-        }
-
-        // Strategy 3: property type + known location
-        if let type = propType, let loc = location, !loc.isEmpty {
-            return DraftField(value: "\(type) en \(loc)", confidence: .low,
-                              warning: "Título generado de la ubicación detectada. Verifique.")
-        }
-
-        return DraftField(confidence: .missing,
-                          warning: "Ingrese el título de la propiedad.")
-    }
-
     // MARK: - Property type detection
-
-    // Legacy: used for title generation (string label)
-    private func detectPropertyType(_ lower: String) -> String? {
-        detectStructuredPropertyType(lower, lines: []).value?.label
-    }
 
     // Heading-first detection prevents room names ("Bodega") from overriding heading type.
     // Priority order: explicit field → first 2 heading lines → first 5 lines → body (no warehouse)
@@ -756,33 +702,6 @@ struct LocalListingParser: ListingImportService {
             }
         }
         return nil
-    }
-
-    // MARK: - Public description extraction
-
-    private func detectPublicDescription(lines: [String], lower: String) -> DraftField<String> {
-        // Heuristic: look for a section that starts with "descripción:" or take the first
-        // paragraph that is at least 30 chars and not a section header
-        let descHeaders = ["descripción:", "descripcion:", "sobre la propiedad:", "acerca de:"]
-        let descItems = extractSection(from: lines, headers: descHeaders,
-                                       stopWords: ["precio", "renta", "requisitos", "#"])
-        if !descItems.isEmpty {
-            return DraftField(value: descItems.joined(separator: " "), confidence: .medium)
-        }
-
-        // First non-header line with enough length
-        for line in lines {
-            let stripped = stripLeadingDecoration(line)
-            let stripped_lower = stripped.lowercased()
-            let skipWords = ["renta", "venta", "precio", "disponible", "apartamento", "casa",
-                             "terreno", "oficina", "bodega", "townhouse", "q.", "gtq"]
-            guard stripped.count >= 30,
-                  !skipWords.contains(where: { stripped_lower.hasPrefix($0) }),
-                  !isPromoPhrase(stripped) else { continue }
-            return DraftField(value: stripped, confidence: .low,
-                              warning: "Descripción extraída automáticamente. Verifique.")
-        }
-        return DraftField(confidence: .missing)
     }
 
     // MARK: - FHA eligibility

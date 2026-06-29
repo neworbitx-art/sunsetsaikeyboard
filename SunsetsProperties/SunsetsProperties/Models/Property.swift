@@ -92,6 +92,7 @@ struct Property: Identifiable, Codable, Equatable {
             "precio", "precio de venta", "precio de renta",
             "ubicación:", "ubicacion:",
             " q.", "q.", "gtq", "usd",
+            "mantenimiento", "mant.",
             "http://", "https://", "www.",
             "@",
             "renta en", "en renta", "en venta", "venta en",
@@ -99,7 +100,29 @@ struct Property: Identifiable, Codable, Equatable {
             "whatsapp", "teléfono", "telefono",
             "información y citas", "informacion y citas",
         ]
-        return !badPhrases.contains(where: { lower.contains($0) })
+        if badPhrases.contains(where: { lower.contains($0) }) { return false }
+        // Reject bare Quetzal amounts that have no period: "Q 5,000", "Q5000"
+        if lower.range(of: #"q\s*\d"#, options: .regularExpression) != nil { return false }
+        return true
+    }
+
+    /// Returns true when a stored displayTitle is suspected to contain parser-injected price
+    /// text, maintenance info, or a property-type label that conflicts with the structured field.
+    /// The decoder uses this to trigger a canonical rebuild for affected legacy records.
+    static func isLegacyBadTitle(_ title: String, propertyType: PropertyType) -> Bool {
+        let lower = title.lowercased()
+        // Price / currency markers (with or without a period separator)
+        if lower.range(of: #"q\s*\d"#, options: .regularExpression) != nil { return true }
+        if lower.contains("gtq") || lower.contains("usd") { return true }
+        if lower.contains("mantenimiento") { return true }
+        // Type conflict: title begins with a recognised type label different from the stored type
+        guard propertyType != .other else { return false }
+        for candidate in PropertyType.allCases where candidate != .other {
+            if lower.hasPrefix(candidate.label.lowercased() + " en ") && candidate != propertyType {
+                return true
+            }
+        }
+        return false
     }
 
     /// Computes the canonical display title from structured fields.
@@ -274,10 +297,23 @@ extension Property {
         createdAt      = try c.decode(Date.self, forKey: .createdAt)
         updatedAt      = try c.decode(Date.self, forKey: .updatedAt)
 
-        // Migration: if displayTitle key is present in JSON, use it as-is (including empty string,
-        // which preserves an explicit user clear). If key is absent (legacy JSON), compute from fields.
+        // Migration: if displayTitle key is present, validate it.
+        // Legacy titles that contain price markers or a property-type mismatch are rebuilt
+        // from structured fields. An absent key (old JSON) always triggers a canonical rebuild.
         if c.contains(.displayTitle) {
-            displayTitle = (try c.decodeIfPresent(String.self, forKey: .displayTitle)) ?? ""
+            let stored = (try c.decodeIfPresent(String.self, forKey: .displayTitle)) ?? ""
+            if !stored.isEmpty && Property.isLegacyBadTitle(stored, propertyType: propertyType) {
+                displayTitle = Property.buildCanonicalTitle(
+                    propertyType: propertyType,
+                    operationType: operationType,
+                    developmentName: developmentName,
+                    neighborhoodName: neighborhoodName,
+                    publicLocationLabel: publicLocationLabel,
+                    locationSummary: locationSummary
+                )
+            } else {
+                displayTitle = stored
+            }
         } else {
             displayTitle = Property.buildCanonicalTitle(
                 propertyType: propertyType,

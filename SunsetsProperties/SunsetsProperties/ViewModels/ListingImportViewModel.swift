@@ -26,6 +26,11 @@ enum ListingImportState: Equatable {
     private let parser: any ListingImportService
     private let repository: any PropertyRepository
 
+    // Incremented by every resetDraft() call. A parse task that started
+    // before the last reset will see a mismatch and discard its result,
+    // preventing stale .ready state from overwriting a clean .idle.
+    private var analysisGeneration: Int = 0
+
     init(repository: any PropertyRepository, parser: any ListingImportService = LocalListingParser()) {
         self.repository = repository
         self.parser = parser
@@ -41,17 +46,31 @@ enum ListingImportState: Equatable {
     }
 
     func parse() async {
+        guard importState != .parsing else { return }
+        let generation = analysisGeneration
         importState = .parsing
         do {
             let result = try await parser.parse(rawText)
+            guard analysisGeneration == generation else { return }
             importState = .ready(result)
         } catch {
+            guard analysisGeneration == generation else { return }
             importState = .failed(error.localizedDescription)
         }
     }
 
+    /// Clears the presented draft and resets to idle so Analyze can be triggered
+    /// again with the same pasted text. Called by ListingImportView's sheet
+    /// onDismiss handler (fires on both Discard and Cancel).
+    /// rawText is intentionally preserved so the user does not need to re-paste.
+    func resetDraft() {
+        analysisGeneration += 1
+        importState = .idle
+    }
+
     func reset() {
         rawText = ""
+        analysisGeneration += 1
         importState = .idle
     }
 

@@ -107,6 +107,23 @@ final class PropertyEditorViewModel {
         internalCode = code
     }
 
+    /// Prefills `displayTitle` with a canonical suggestion when the field is empty.
+    /// Called by DraftReviewView right after `load(from:)` so the user sees an editable
+    /// starting point. Does nothing when `displayTitle` is already set or `propertyType`
+    /// is `.other` (unknown type → no meaningful suggestion).
+    func seedSuggestedDisplayTitle() {
+        guard displayTitle.trimmingCharacters(in: .whitespaces).isEmpty else { return }
+        guard propertyType != .other else { return }
+        displayTitle = Property.buildCanonicalTitle(
+            propertyType: propertyType,
+            operationType: operationType,
+            developmentName: nil,
+            neighborhoodName: nil,
+            publicLocationLabel: nilIfEmpty(publicLocationLabelText),
+            locationSummary: locationSummary
+        )
+    }
+
     // MARK: - Load from Property
 
     func load(from property: Property) {
@@ -170,10 +187,7 @@ final class PropertyEditorViewModel {
 
     func load(from draft: PropertyDraft) {
         if let pt = draft.propertyType.value { propertyType = pt }
-        if let pd = draft.publicDescription.value   { publicDescription = pd }
         if let pl = draft.publicListingText.value   { publicListingText = pl }
-        // Seed displayTitle from the draft title when not already set
-        if displayTitle.isEmpty, let t = draft.title.value { displayTitle = t }
         if let op = draft.operationType.value { operationType = op }
         if let st = draft.status.value { status = st }
         if let p = draft.price.value { priceText = plainDecimal(p) }

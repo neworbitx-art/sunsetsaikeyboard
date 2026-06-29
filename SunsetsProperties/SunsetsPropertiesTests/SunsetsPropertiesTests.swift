@@ -980,35 +980,6 @@ struct TantaPremierParserTests {
     }
 }
 
-// MARK: - Title generation tests
-
-@Suite("LocalListingParser — Title Generation")
-struct TitleGenerationTests {
-
-    let parser = LocalListingParser()
-
-    @Test func centoBuildsTitleApartamentoEnCENTO() async throws {
-        let draft = try await parser.parse(LocalListingParserTests.centoListing)
-        let title = draft.title.value ?? ""
-        #expect(title.localizedCaseInsensitiveContains("CENTO"))
-        #expect(title.localizedCaseInsensitiveContains("apartamento") ||
-                title.localizedCaseInsensitiveContains("departamento"))
-    }
-
-    @Test func tantaPremierBuildsTitleCasaEnTantaPremier() async throws {
-        let draft = try await parser.parse(TantaPremierParserTests.tantaListing)
-        let title = draft.title.value ?? ""
-        #expect(title.localizedCaseInsensitiveContains("Tanta Premier") ||
-                title.localizedCaseInsensitiveContains("casa"))
-    }
-
-    @Test func titleNotHighConfidenceWhenGenerated() async throws {
-        let draft = try await parser.parse(TantaPremierParserTests.tantaListing)
-        // Generated title must be flagged for review
-        #expect(draft.title.confidence != .high)
-        #expect(draft.title.warning != nil)
-    }
-}
 
 // MARK: - Pet Policy Refinement Tests
 
@@ -1279,8 +1250,7 @@ struct ListingSanitizationTests {
         #casaenrenta #sunsets #guatemala #inmobiliaria
         """
         let draft = try await parser.parse(listing)
-        // hashtags field captures originals; title/location should not contain "#"
-        #expect(draft.title.value?.contains("#") != true)
+        // hashtags field captures originals; location should not contain "#"
         #expect(draft.locationSummary.value?.contains("#") != true)
     }
 
@@ -1298,7 +1268,7 @@ struct ListingSanitizationTests {
         #expect(!visit.lowercased().contains("contáctenos"))
     }
 
-    @Test("Company signature lines are excluded from title")
+    @Test("Company signature lines are excluded from sanitized listing text")
     func testCompanySignatureExcluded() async throws {
         let listing = """
         Casa en venta Q 1,200,000
@@ -1307,7 +1277,8 @@ struct ListingSanitizationTests {
         Sunsets Real Estate — exclusiva
         """
         let draft = try await parser.parse(listing)
-        #expect(draft.title.value?.lowercased().contains("sunsets") != true)
+        let body = draft.publicListingText.value ?? ""
+        #expect(!body.lowercased().contains("sunsets real estate"))
     }
 
     @Test("Clean content is not affected by sanitization")
@@ -2825,5 +2796,452 @@ struct EditPathRegressionTests {
         let second = vm.buildProperty()
         #expect(first?.id == "stable-id")
         #expect(second?.id == "stable-id")
+    }
+}
+
+// MARK: - Title handling regression tests
+
+@Suite("TitleHandling")
+struct TitleHandlingTests {
+
+    let parser = LocalListingParser()
+
+    @Test("Parser does not populate displayTitle from listing text")
+    func importerLeavesDisplayTitleEmpty() async throws {
+        let draft = try await parser.parse("Casa en renta Q 5,000\nZona 10")
+        let vm = PropertyEditorViewModel()
+        vm.load(from: draft)
+        #expect(vm.displayTitle.isEmpty)
+    }
+
+    @Test("isCleanLocationPart rejects bare Quetzal amount without a period")
+    func isCleanLocationPartRejectsBareQuetzal() {
+        #expect(Property.isCleanLocationPart("Q 5,000 mensuales") == false)
+        #expect(Property.isCleanLocationPart("Q5000") == false)
+        #expect(Property.isCleanLocationPart("Q 1200000") == false)
+    }
+
+    @Test("isCleanLocationPart rejects maintenance text")
+    func isCleanLocationPartRejectsMantenimiento() {
+        #expect(Property.isCleanLocationPart("mantenimiento incluido") == false)
+        #expect(Property.isCleanLocationPart("500 mant.") == false)
+    }
+
+    @Test("isLegacyBadTitle flags title containing price or maintenance text")
+    func isLegacyBadTitleFlagsPriceMarker() {
+        #expect(Property.isLegacyBadTitle("Casa en Zona 10 Q 5,000", propertyType: .house) == true)
+        #expect(Property.isLegacyBadTitle("Apartamento en renta GTQ 4,200", propertyType: .apartment) == true)
+        #expect(Property.isLegacyBadTitle("Bodega con mantenimiento incluido", propertyType: .warehouse) == true)
+    }
+
+    @Test("isLegacyBadTitle flags title whose type prefix conflicts with stored propertyType")
+    func isLegacyBadTitleFlagsTypeConflict() {
+        #expect(Property.isLegacyBadTitle("Casa en renta · Zona 14", propertyType: .apartment) == true)
+        #expect(Property.isLegacyBadTitle("Apartamento en venta · Zona 10", propertyType: .house) == true)
+    }
+
+    @Test("isLegacyBadTitle does not flag a clean, matching title")
+    func isLegacyBadTitleAcceptsCleanTitle() {
+        #expect(Property.isLegacyBadTitle("Casa en renta · Zona 14", propertyType: .house) == false)
+        #expect(Property.isLegacyBadTitle("Apartamento en venta · Zona 10", propertyType: .apartment) == false)
+        #expect(Property.isLegacyBadTitle("", propertyType: .house) == false)
+    }
+
+    @Test("Legacy JSON with price marker in displayTitle is rebuilt on decode")
+    func legacyTitleWithPriceIsRepairedOnDecode() throws {
+        let json = """
+        {
+            "id": "leg-001", "internalCode": "SUN-101",
+            "propertyType": "house",
+            "displayTitle": "Casa en Zona 10 Q 5,000",
+            "operationType": "rent", "status": "available",
+            "price": 5000, "currency": "GTQ", "maintenanceIncluded": false,
+            "locationSummary": "Zona 10", "country": "Guatemala",
+            "bedrooms": 2, "bathrooms": 1.0, "parkingSpaces": 0,
+            "areaSquareMeters": 80, "amenities": [], "includedAppliances": [],
+            "requirements": [], "petPolicy": "notAllowed", "quickReplyTemplates": [],
+            "isFavorite": false, "createdAt": "2025-01-01T00:00:00Z", "updatedAt": "2025-01-01T00:00:00Z"
+        }
+        """.data(using: .utf8)!
+        let decoder = JSONDecoder(); decoder.dateDecodingStrategy = .iso8601
+        let p = try decoder.decode(Property.self, from: json)
+        #expect(!p.displayTitle.contains("Q 5,000"))
+        #expect(p.displayTitle == "Casa en renta · Zona 10")
+    }
+
+    @Test("Legacy JSON with type-conflict in displayTitle is rebuilt on decode")
+    func legacyTitleWithTypeConflictIsRepairedOnDecode() throws {
+        let json = """
+        {
+            "id": "leg-002", "internalCode": "SUN-102",
+            "propertyType": "apartment",
+            "displayTitle": "Casa en Zona 14",
+            "operationType": "rent", "status": "available",
+            "price": 4200, "currency": "GTQ", "maintenanceIncluded": false,
+            "locationSummary": "Zona 14", "country": "Guatemala",
+            "bedrooms": 2, "bathrooms": 1.0, "parkingSpaces": 0,
+            "areaSquareMeters": 80, "amenities": [], "includedAppliances": [],
+            "requirements": [], "petPolicy": "notAllowed", "quickReplyTemplates": [],
+            "isFavorite": false, "createdAt": "2025-01-01T00:00:00Z", "updatedAt": "2025-01-01T00:00:00Z"
+        }
+        """.data(using: .utf8)!
+        let decoder = JSONDecoder(); decoder.dateDecodingStrategy = .iso8601
+        let p = try decoder.decode(Property.self, from: json)
+        #expect(!p.displayTitle.lowercased().hasPrefix("casa"))
+        #expect(p.displayTitle == "Apartamento en renta · Zona 14")
+    }
+}
+
+// MARK: - DraftReview display-title seeding tests
+
+@Suite("DraftReviewTitleHandling")
+struct DraftReviewTitleHandlingTests {
+
+    @Test("seedSuggestedDisplayTitle fills empty displayTitle from type and operation")
+    func seedFillsFromTypeAndOperation() {
+        let vm = PropertyEditorViewModel()
+        vm.propertyType = .house
+        vm.operationType = .rent
+        vm.seedSuggestedDisplayTitle()
+        #expect(vm.displayTitle == "Casa en renta")
+    }
+
+    @Test("seedSuggestedDisplayTitle includes clean locationSummary when available")
+    func seedIncludesCleanLocation() {
+        let vm = PropertyEditorViewModel()
+        vm.propertyType = .apartment
+        vm.operationType = .rent
+        vm.locationSummary = "Zona 14"
+        vm.seedSuggestedDisplayTitle()
+        #expect(vm.displayTitle == "Apartamento en renta · Zona 14")
+    }
+
+    @Test("seedSuggestedDisplayTitle includes publicLocationLabel over locationSummary when both set")
+    func seedPrefersPublicLocationLabel() {
+        let vm = PropertyEditorViewModel()
+        vm.propertyType = .apartment
+        vm.operationType = .rent
+        vm.publicLocationLabelText = "Zona 14"
+        vm.locationSummary = "Zona 14, Guatemala City, Guatemala"
+        vm.seedSuggestedDisplayTitle()
+        #expect(vm.displayTitle == "Apartamento en renta · Zona 14")
+    }
+
+    @Test("seedSuggestedDisplayTitle does not overwrite an existing displayTitle")
+    func seedDoesNotOverwrite() {
+        let vm = PropertyEditorViewModel()
+        vm.propertyType = .house
+        vm.operationType = .rent
+        vm.locationSummary = "Zona 10"
+        vm.displayTitle = "Mi título personalizado"
+        vm.seedSuggestedDisplayTitle()
+        #expect(vm.displayTitle == "Mi título personalizado")
+    }
+
+    @Test("seedSuggestedDisplayTitle is a no-op when propertyType is .other")
+    func seedNoOpForUnknownType() {
+        let vm = PropertyEditorViewModel()
+        vm.propertyType = .other
+        vm.locationSummary = "Zona 10"
+        vm.seedSuggestedDisplayTitle()
+        #expect(vm.displayTitle.isEmpty)
+    }
+
+    @Test("seedSuggestedDisplayTitle excludes price-contaminated locationSummary")
+    func seedRejectsPriceInLocation() {
+        let vm = PropertyEditorViewModel()
+        vm.propertyType = .house
+        vm.operationType = .rent
+        vm.locationSummary = "Q 5,000 mensuales"
+        vm.seedSuggestedDisplayTitle()
+        #expect(!vm.displayTitle.contains("5,000"))
+        #expect(!vm.displayTitle.contains("Q"))
+        #expect(vm.displayTitle == "Casa en renta")
+    }
+
+    @Test("buildProperty after seed uses the seeded title exactly")
+    func buildPropertyUsesSeededTitle() {
+        let vm = PropertyEditorViewModel()
+        vm.propertyType = .apartment
+        vm.operationType = .rent
+        vm.locationSummary = "Zona 15"
+        vm.priceText = "4500"
+        vm.seedSuggestedDisplayTitle()
+        vm.setInternalCodeForTesting("SUN-999")
+        let built = vm.buildProperty()
+        #expect(built?.displayTitle == "Apartamento en renta · Zona 15")
+    }
+
+    @Test("buildProperty uses manual title after user edits the seeded value")
+    func buildPropertyUsesManualOverSeed() {
+        let vm = PropertyEditorViewModel()
+        vm.propertyType = .house
+        vm.operationType = .sale
+        vm.locationSummary = "Zona 10"
+        vm.priceText = "1200000"
+        vm.seedSuggestedDisplayTitle()
+        vm.displayTitle = "Casa con vista al lago"
+        vm.setInternalCodeForTesting("SUN-999")
+        let built = vm.buildProperty()
+        #expect(built?.displayTitle == "Casa con vista al lago")
+    }
+
+    @Test("full import pipeline: seed title flows through load(from draft:) to saved Property")
+    func importPipelineTitleFlowsThrough() {
+        let vm = PropertyEditorViewModel()
+        var draft = PropertyDraft(id: UUID().uuidString, sourceDescription: "test", parserVersion: "1")
+        draft.propertyType = DraftField(value: .house, confidence: .high)
+        draft.operationType = DraftField(value: .rent, confidence: .high)
+        draft.locationSummary = DraftField(value: "Zona 10", confidence: .high)
+        draft.price = DraftField(value: Decimal(5000), confidence: .high)
+        draft.currency = DraftField(value: "GTQ", confidence: .high)
+        vm.load(from: draft)
+        vm.seedSuggestedDisplayTitle()
+        vm.setInternalCodeForTesting("SUN-999")
+        let built = vm.buildProperty()
+        #expect(built?.displayTitle == "Casa en renta · Zona 10")
+    }
+}
+
+// MARK: - Import lifecycle tests
+
+@Suite("ImportLifecycle")
+struct ImportLifecycleTests {
+
+    private let listing = "Casa en renta Q 5,000\n3 recámaras\nZona 10"
+
+    @Test("analyze → discard → analyze again succeeds and reaches .ready twice")
+    func analyzeDiscardAnalyze() async throws {
+        let vm = ListingImportViewModel(repository: StubRepository())
+        vm.rawText = listing
+
+        // First analysis
+        await vm.parse()
+        guard case .ready = vm.importState else {
+            Issue.record("Expected .ready after first parse; got \(vm.importState)")
+            return
+        }
+
+        // Discard (mirrors what onDismiss calls)
+        vm.resetDraft()
+        #expect(vm.importState == .idle)
+        #expect(vm.rawText == listing)   // pasted text preserved
+
+        // Second analysis with the same text
+        await vm.parse()
+        guard case .ready(let draft) = vm.importState else {
+            Issue.record("Expected .ready after second parse; got \(vm.importState)")
+            return
+        }
+        #expect(draft.operationType.value == .rent)
+    }
+
+    @Test("resetDraft sets importState to .idle without clearing rawText")
+    func resetDraftPreservesRawText() async {
+        let vm = ListingImportViewModel(repository: StubRepository())
+        vm.rawText = listing
+        await vm.parse()
+        vm.resetDraft()
+        #expect(vm.importState == .idle)
+        #expect(vm.rawText == listing)
+    }
+
+    @Test("parse() while already parsing is a no-op — does not restart or stack")
+    func parseWhileParsing() async {
+        let vm = ListingImportViewModel(repository: StubRepository())
+        vm.rawText = listing
+        // Inject .parsing state directly to simulate an in-flight task
+        vm.importState = .parsing
+        await vm.parse()
+        // Guard should have returned immediately; state is still .parsing (not .idle)
+        #expect(vm.importState == .parsing)
+    }
+
+    @Test("stale parse result is discarded when resetDraft is called before completion")
+    func staleParsDiscardedAfterReset() async {
+        // A parser that suspends until signalled, letting us interleave resetDraft().
+        let held = HeldParser()
+        let vm = ListingImportViewModel(repository: StubRepository(), parser: held)
+        vm.rawText = listing
+
+        // Start parse — suspends inside HeldParser until released
+        let parseTask = Task { await vm.parse() }
+        // Yield to let parse() reach the suspension point and set .parsing
+        await Task.yield()
+        await Task.yield()
+
+        // Discard while parse is still in flight
+        vm.resetDraft()
+        #expect(vm.importState == .idle)
+
+        // Release the parser — the stale result must be dropped
+        await held.release()
+        await parseTask.value
+
+        // importState must still be .idle, not .ready
+        #expect(vm.importState == .idle)
+    }
+
+    @Test("reset() clears both rawText and importState")
+    func fullResetClearsBoth() async {
+        let vm = ListingImportViewModel(repository: StubRepository())
+        vm.rawText = listing
+        await vm.parse()
+        vm.reset()
+        #expect(vm.importState == .idle)
+        #expect(vm.rawText.isEmpty)
+    }
+}
+
+// MARK: - SharedFormSections
+
+/// Verifies that all draft fields (including those previously absent from
+/// DraftReviewView) flow correctly through the VM pipeline that the shared
+/// form sections rely on.
+@Suite("SharedFormSections")
+struct SharedFormSectionsTests {
+
+    private func makeDraft(
+        operationType: OperationType = .rent,
+        price: Decimal = 5_000,
+        currency: String = "GTQ",
+        locationSummary: String = "Zona 10"
+    ) -> PropertyDraft {
+        var d = PropertyDraft(id: UUID().uuidString, sourceDescription: "test", parserVersion: "1")
+        d.operationType = DraftField(value: operationType, confidence: .high)
+        d.price         = DraftField(value: price, confidence: .high)
+        d.currency      = DraftField(value: currency, confidence: .high)
+        d.locationSummary = DraftField(value: locationSummary, confidence: .high)
+        return d
+    }
+
+    private func loadedVM(from draft: PropertyDraft) -> PropertyEditorViewModel {
+        let vm = PropertyEditorViewModel()
+        vm.load(from: draft)
+        vm.setInternalCodeForTesting("SUN-001")
+        return vm
+    }
+
+    @Test("area from draft flows through to built property")
+    func areaFlowsThrough() {
+        var d = makeDraft()
+        d.areaSquareMeters = DraftField(value: 85.5, confidence: .high)
+        let vm = loadedVM(from: d)
+        let p = vm.buildProperty()
+        #expect(p?.areaSquareMeters == 85.5)
+    }
+
+    @Test("requirements from draft flow through to built property")
+    func requirementsFlowThrough() {
+        var d = makeDraft()
+        d.requirements = DraftField(value: ["DPI", "Carta de ingresos"], confidence: .medium)
+        let vm = loadedVM(from: d)
+        // override the rent-defaults that load() applies
+        vm.requirementsText = "DPI\nCarta de ingresos"
+        let p = vm.buildProperty()
+        #expect(p?.requirements == ["DPI", "Carta de ingresos"])
+    }
+
+    @Test("half bathrooms set manually flow through to built property")
+    func halfBathroomsFlowThrough() {
+        let d = makeDraft()
+        let vm = loadedVM(from: d)
+        vm.halfBathroomsText = "1"
+        let p = vm.buildProperty()
+        #expect(p?.halfBathrooms == 1)
+    }
+
+    @Test("pet policy set manually flows through to built property")
+    func petPolicyFlowsThrough() {
+        let d = makeDraft()
+        let vm = loadedVM(from: d)
+        vm.petPolicy = .allowed
+        let p = vm.buildProperty()
+        #expect(p?.petPolicy == .allowed)
+    }
+
+    @Test("includedItems from draft flow through to built property")
+    func includedItemsFlowThrough() {
+        var d = makeDraft()
+        d.includedItems = DraftField(value: ["Cortinas", "Lámparas"], confidence: .medium)
+        let vm = loadedVM(from: d)
+        let p = vm.buildProperty()
+        #expect(p?.includedItems == ["Cortinas", "Lámparas"])
+    }
+
+    @Test("bank financing set manually flows through to built property")
+    func bankFinancingFlowsThrough() {
+        var d = makeDraft(operationType: .sale)
+        d.sellerFinancingStatus = DraftField(value: .unavailable, confidence: .high)
+        let vm = loadedVM(from: d)
+        vm.bankFinancingAssistanceAvailable = true
+        let p = vm.buildProperty()
+        #expect(p?.bankFinancingAssistanceAvailable == true)
+    }
+
+    @Test("IUSI fields set manually flow through to built property")
+    func iusiFlowsThrough() {
+        var d = makeDraft(operationType: .sale)
+        let vm = loadedVM(from: d)
+        vm.iusiAmountText = "1200"
+        vm.iusiFrequencyText = "anual"
+        vm.iusiNotesText = "Pagado al día"
+        let p = vm.buildProperty()
+        #expect(p?.iusiAmount == 1200)
+        #expect(p?.iusiFrequency == "anual")
+        #expect(p?.iusiNotes == "Pagado al día")
+    }
+
+    @Test("comprehensive: all detectable draft fields flow to built property")
+    func allDetectableFieldsFlowThrough() {
+        var d = makeDraft(operationType: .rent, locationSummary: "Zona 14, Guatemala")
+        d.propertyType   = DraftField(value: .house,     confidence: .high)
+        d.status         = DraftField(value: .available, confidence: .high)
+        d.maintenanceFee = DraftField(value: 300,        confidence: .medium)
+        d.bedrooms       = DraftField(value: 3,          confidence: .high)
+        d.bathrooms      = DraftField(value: 2.5,        confidence: .high)
+        d.parkingSpaces  = DraftField(value: 2,          confidence: .high)
+        d.areaSquareMeters = DraftField(value: 120.0,    confidence: .medium)
+        d.floorNumber    = DraftField(value: 2,          confidence: .low)
+        d.amenities      = DraftField(value: ["Piscina", "Gimnasio"], confidence: .medium)
+        d.includedAppliances = DraftField(value: ["Refrigerador"], confidence: .medium)
+        d.includedItems  = DraftField(value: ["Cortinas"],          confidence: .low)
+        d.excludedItems  = DraftField(value: ["Estufa"],            confidence: .low)
+        d.requirements   = DraftField(value: ["DPI", "Fiador"],     confidence: .medium)
+        d.visitInstructions = DraftField(value: "Llamar antes",     confidence: .high)
+
+        let vm = loadedVM(from: d)
+        vm.requirementsText = "DPI\nFiador"   // override rent defaults
+        let p = vm.buildProperty()
+
+        #expect(p?.propertyType == .house)
+        #expect(p?.areaSquareMeters == 120)
+        #expect(p?.floorNumber == 2)
+        #expect(p?.requirements == ["DPI", "Fiador"])
+        #expect(p?.visitInstructions == "Llamar antes")
+        #expect(p?.amenities.contains("Piscina") == true)
+        #expect(p?.includedItems == ["Cortinas"])
+        #expect(p?.excludedItems == ["Estufa"])
+    }
+}
+
+// Suspends until release() is called, letting tests interleave state mutations
+// between parse start and parse completion to verify stale-result protection.
+actor HeldParser: ListingImportService {
+    private var continuation: CheckedContinuation<PropertyDraft, Error>?
+
+    func parse(_ description: String) async throws -> PropertyDraft {
+        try await withCheckedThrowingContinuation { cont in
+            continuation = cont
+        }
+    }
+
+    func release() {
+        continuation?.resume(returning: PropertyDraft(
+            id: UUID().uuidString,
+            sourceDescription: "held",
+            parserVersion: "mock"
+        ))
+        continuation = nil
     }
 }
