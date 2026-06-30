@@ -1,5 +1,8 @@
 import Foundation
 
+#if DEBUG
+/// Demo catalog used exclusively by unit tests and SwiftUI previews.
+/// Compiled only in DEBUG builds and never seeded into a production catalog.
 enum SeedData {
 
     static let properties: [Property] = [
@@ -203,6 +206,5 @@ enum SeedData {
             updatedAt: Calendar.current.date(byAdding: .day, value: -1, to: Date()) ?? Date()
         )
     ]
-
-    static let employees: [String] = ["Cristian", "Yessy"]
 }
+#endif

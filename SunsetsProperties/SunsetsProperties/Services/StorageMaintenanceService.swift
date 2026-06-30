@@ -80,9 +80,8 @@ final class StorageMaintenanceService {
         let defaults = UserDefaults.standard
         defaults.removeObject(forKey: "activePropertyId")
         defaults.removeObject(forKey: "currentEmployee")
-        defaults.removeObject(forKey: "catalogSeeded")
         defaults.removeObject(forKey: "lastIssuedInternalCodeNumber")
-        defaults.removeObject(forKey: "catalogMigrated_1_1")
+        defaults.removeObject(forKey: "catalogPrepared_v2")
 
         // Reset App Group keys and cache
         let appGroupID = "group.com.zircondata.sunsetsai"
@@ -100,12 +99,6 @@ final class StorageMaintenanceService {
 
         // Clear keyboard cache file
         cacheService.clearCache()
-    }
-
-    // MARK: - Restore demo data
-
-    func restoreDemoData() async throws {
-        try await repository.seedIfNeeded(SeedData.properties)
     }
 
     // MARK: - Helpers

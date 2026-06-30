@@ -1,7 +1,23 @@
 # Project Status — Sunsets AI
 
-**Last updated:** 2026-06-27
+**Last updated:** 2026-06-29
 **Current milestone:** Milestone 2 — Local SunsetsAIKeyboard Extension ✅ (awaiting approval — corrections applied)
+
+---
+
+## Catalog Persistence Repair ✅ (awaiting manual validation, 2026-06-29)
+
+Fix for the catalog data-loss bug where demo SUN-001…SUN-006 could overwrite real device data on relaunch (see ADR-015).
+
+- [x] `Repositories/LocalPropertyRepository.swift` — removed `seedIfNeeded` and the `catalogSeeded` flag; replaced flag-gated migration with `prepareCatalog()` (missing → empty catalog; already-prepared → untouched; undecodable → preserved + recoverable `CatalogError`, never overwritten; first run → one validated atomic backup then in-place normalisation). `fetchActiveId()` now returns the stored UUID only when that property exists, clearing dangling pointers.
+- [x] `SunsetsPropertiesApp.swift` — launch calls `prepareCatalog()` only; no runtime seeding.
+- [x] `Services/StorageMaintenanceService.swift` — removed `restoreDemoData()`; `clearAllLocalData()` clears `catalogPrepared_v2`.
+- [x] `Views/Settings/SettingsView.swift` — removed the "Restaurar datos de ejemplo" action; employee picker uses `EmployeeDirectory`.
+- [x] `Models/EmployeeDirectory.swift` — NEW. Production employee roster (Cristian / Yessy).
+- [x] `Fixtures/SeedData.swift` — demo catalog now `#if DEBUG`-only (tests/previews); employee roster removed.
+- [x] `SunsetsPropertiesTests/CatalogPersistenceTests.swift` — NEW. 8 serialized regression tests: fresh install, relaunch, update install, corrupt catalog, migration failure, no-demo-reseed-on-lost-flag, favorites single-source, active-property existence.
+- [x] **355/355 unit tests pass** (`-parallel-testing-enabled NO`). Build: `** TEST SUCCEEDED **` (iPhone 17 Simulator).
+- [x] docs updated: DECISIONS.md (ADR-015), PROJECT_STATUS.md.
 
 ---
 

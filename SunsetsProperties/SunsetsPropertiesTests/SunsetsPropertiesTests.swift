@@ -208,6 +208,8 @@ struct RepositoryTests {
 
     @Test func activeIdPersists() async throws {
         let repo = makeRepository()
+        // The active id is kept only when the referenced property exists, so seed it first.
+        try await repo.save(makeSampleProperty(id: "some-id"))
         try await repo.setActiveId("some-id")
         let fetched = try await repo.fetchActiveId()
         #expect(fetched == "some-id")
@@ -229,24 +231,6 @@ struct RepositoryTests {
         try await repo.delete(id: property.id)
         let activeId = try await repo.fetchActiveId()
         #expect(activeId == nil)
-    }
-
-    @Test func seedOnlyOnce() async throws {
-        let repo = makeRepository()
-        let seed = [makeSampleProperty(id: "s1"), makeSampleProperty(id: "s2")]
-        try await repo.seedIfNeeded(seed)
-        try await repo.seedIfNeeded(seed)
-        let all = try await repo.fetchAll()
-        #expect(all.count == 2)
-    }
-
-    @Test func seedDoesNotRunIfAlreadySeeded() async throws {
-        let repo = makeRepository()
-        try await repo.seedIfNeeded([makeSampleProperty(id: "s1")])
-        try await repo.save(makeSampleProperty(id: "s2"))
-        try await repo.seedIfNeeded([makeSampleProperty(id: "s3")])
-        let all = try await repo.fetchAll()
-        #expect(all.count == 2)
     }
 
     @Test func employeeRoundTrip() async throws {
@@ -350,8 +334,8 @@ struct RepositoryTests {
         ]
         // Write them directly (simulating Milestone 1 state)
         for p in existing { try await repo.save(p) }
-        // Seed is not set yet (simulate pre-migration)
-        try await repo.migrateIfNeeded()
+        // Prepare runs the one-time migration normalisation over the existing catalog.
+        try await repo.prepareCatalog()
         // After migration, next code should continue from SUN-005
         let next = try await repo.peekNextInternalCode()
         #expect(next == "SUN-006")
@@ -585,9 +569,9 @@ struct SeedDataTests {
     }
 
     @Test func twoEmployees() {
-        #expect(SeedData.employees.count == 2)
-        #expect(SeedData.employees.contains("Cristian"))
-        #expect(SeedData.employees.contains("Yessy"))
+        #expect(EmployeeDirectory.all.count == 2)
+        #expect(EmployeeDirectory.all.contains("Cristian"))
+        #expect(EmployeeDirectory.all.contains("Yessy"))
     }
 }
 

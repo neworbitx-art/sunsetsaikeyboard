@@ -1,8 +1,38 @@
 # Architecture Decision Records — Sunsets AI
 
-**Last updated:** 2026-06-27
+**Last updated:** 2026-06-29
 
 Decisions are recorded here in reverse-chronological order (newest first). Each record follows the ADR format: Context → Decision → Alternatives → Consequences → Status.
+
+---
+
+## ADR-015 — Catalog persistence: no demo seeding, validated backups, never overwrite
+
+**Date:** 2026-06-29
+**Status:** Accepted
+
+### Context
+The original `LocalPropertyRepository` gated demo seeding (SUN-001…SUN-006) on a `catalogSeeded` boolean in `UserDefaults.standard`, while the catalog itself lived in `Application Support/SunsetsProperties/catalog.json`. The two stores have independent lifecycles. Whenever the flag was absent/false while the file held real data, the next launch's `seedIfNeeded` unconditionally overwrote the file with the six demos — silently destroying real device data. General messages (a separate, un-seeded file) survived, which was the diagnostic signature. The seed write also took no backup, so the overwrite was unrecoverable.
+
+### Decision
+Production never seeds demo data. `seedIfNeeded` and the flag-gated migration are removed and replaced by `prepareCatalog()`:
+
+- **Missing catalog** → create an empty catalog (`[]`). Never demo data.
+- **Already prepared** → leave the file untouched.
+- **Present but undecodable** → preserve byte-for-byte, throw a recoverable `LocalPropertyRepository.CatalogError`, never overwrite.
+- **Present and decodable, first run** → take **one validated backup atomically** (decode-check the source, write to a temp, verify byte-identical, then atomically promote to the single `catalog.backup.json` slot), then normalise in place.
+
+Backups are never auto-restored — recovery is an explicit, manual decision. The demo catalog (`SeedData`) is `#if DEBUG`-only and used solely by unit tests and SwiftUI previews; the production employee roster moved to `EmployeeDirectory`. The stored active-property UUID is honoured only when a property with that UUID exists; a dangling pointer is cleared. Favorites remain a single source of truth (`Property.isFavorite`), which also drives the Favorites filter.
+
+### Alternatives Considered
+- **Keep seeding but add a file-existence guard:** Still ships demo data on fresh installs and keeps a destructive seed path. Rejected in favour of never seeding in production.
+- **Co-locate the flag inside the catalog file:** Helps, but does not address the "never overwrite on corruption" or "validated backup" requirements. Superseded by removing the seed path entirely.
+
+### Consequences
+- A fresh install starts with an empty catalog; the keyboard shows "no properties" until the user adds one.
+- An existing real catalog is migrated once (with a validated backup) and never re-seeded, even if the prepared flag is later lost.
+- A corrupt catalog is preserved and surfaced as a recoverable load error instead of being clobbered.
+- The Settings "Restaurar datos de ejemplo" action is removed.
 
 ---
 
