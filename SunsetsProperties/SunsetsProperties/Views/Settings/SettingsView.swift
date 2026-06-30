@@ -5,8 +5,6 @@ struct SettingsView: View {
     @State private var isLoaded = false
     @State private var isPublishing = false
     @State private var showClearConfirmation = false
-    @State private var showRestoreConfirmation = false
-    @State private var catalogIsEmpty = false
 
     private let repository: any PropertyRepository
     private let cacheService: CatalogCacheService
@@ -40,9 +38,7 @@ struct SettingsView: View {
         .task {
             guard !isLoaded else { return }
             isLoaded = true
-            selectedEmployee = (try? await repository.fetchEmployee()) ?? SeedData.employees[0]
-            let all = (try? await repository.fetchAll()) ?? []
-            catalogIsEmpty = all.isEmpty
+            selectedEmployee = (try? await repository.fetchEmployee()) ?? EmployeeDirectory.all[0]
         }
         .confirmationDialog(
             "¿Borrar todos los datos locales?",
@@ -56,18 +52,6 @@ struct SettingsView: View {
         } message: {
             Text("Esta acción elimina el catálogo de propiedades, el caché del teclado y todas las preferencias locales. No se puede deshacer.")
         }
-        .confirmationDialog(
-            "¿Restaurar datos de ejemplo?",
-            isPresented: $showRestoreConfirmation,
-            titleVisibility: .visible
-        ) {
-            Button("Restaurar") {
-                Task { await performRestoreDemoData() }
-            }
-            Button("Cancelar", role: .cancel) {}
-        } message: {
-            Text("Se agregarán las propiedades de ejemplo al catálogo.")
-        }
     }
 
     // MARK: - Employee section
@@ -75,7 +59,7 @@ struct SettingsView: View {
     private var employeeSection: some View {
         Section {
             Picker("Empleado activo", selection: $selectedEmployee) {
-                ForEach(SeedData.employees, id: \.self) { name in
+                ForEach(EmployeeDirectory.all, id: \.self) { name in
                     Text(name).tag(name)
                 }
             }
@@ -259,12 +243,6 @@ struct SettingsView: View {
             Button("Borrar todos los datos locales", role: .destructive) {
                 showClearConfirmation = true
             }
-
-            if catalogIsEmpty {
-                Button("Restaurar datos de ejemplo") {
-                    showRestoreConfirmation = true
-                }
-            }
         } header: {
             Text("Administración de datos")
         } footer: {
@@ -292,14 +270,6 @@ struct SettingsView: View {
     private func performClearAll() async {
         try? await maintenanceService.clearAllLocalData()
         selectedEmployee = ""
-        catalogIsEmpty = true
-    }
-
-    private func performRestoreDemoData() async {
-        try? await maintenanceService.restoreDemoData()
-        await cacheService.publish(repository: repository)
-        let all = (try? await repository.fetchAll()) ?? []
-        catalogIsEmpty = all.isEmpty
     }
 
     // MARK: - Helpers

@@ -23,8 +23,10 @@ struct SunsetsPropertiesApp: App {
             messageRepository: msgRepo
         )
         Task {
-            try? await repo.migrateIfNeeded()
-            try? await repo.seedIfNeeded(SeedData.properties)
+            // Ensure a valid catalog exists. Production never seeds demo data: a missing
+            // catalog is created empty, and an existing-but-unreadable catalog is preserved
+            // untouched (the load error surfaces in the catalog UI).
+            try? await repo.prepareCatalog()
             await cache.publish(repository: repo, messageRepository: msgRepo)
         }
     }
